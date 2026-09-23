@@ -95,7 +95,10 @@ public partial class MainWindow : Window
     {
         visibleStates.Clear();
         foreach (var state in DeviceRoster.Visible(states)) visibleStates.Add(state);
-        Height = 24 + 64 * Math.Max(1, visibleStates.Count);
+        var source = (HwndSource?)PresentationSource.FromVisual(this);
+        var scale = source?.CompositionTarget.TransformToDevice.M22 ?? 1;
+        var maxHeight = (Screen.PrimaryScreen?.WorkingArea.Height ?? 900) / scale - 40;
+        Height = Math.Min(24 + 64 * Math.Max(1, visibleStates.Count), Math.Max(88, maxHeight));
         if (IsLoaded) UpdateDesktopPosition();
     }
 

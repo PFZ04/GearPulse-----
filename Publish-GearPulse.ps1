@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
+param([string]$OutputPath=(Join-Path $PSScriptRoot 'publish\win-x64'))
 $ErrorActionPreference='Stop'
 if(-not $env:DOTNET_CLI_HOME){$env:DOTNET_CLI_HOME=Join-Path $PSScriptRoot '.dotnet-home'}
 if(-not $env:NUGET_PACKAGES){$env:NUGET_PACKAGES=Join-Path $PSScriptRoot '.nuget-packages'}
@@ -19,8 +20,8 @@ if($LASTEXITCODE -ne 0){throw 'GearPulse restore failed.'}
     -c Release --no-restore -r win-x64 --self-contained true `
     -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
     -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false `
-    -o (Join-Path $PSScriptRoot 'publish\win-x64')
+    -o $OutputPath
 if($LASTEXITCODE -ne 0){throw 'GearPulse publish failed.'}
-$pdb=Join-Path $PSScriptRoot 'publish\win-x64\GearPulse.pdb'
+$pdb=Join-Path $OutputPath 'GearPulse.pdb'
 if(Test-Path -LiteralPath $pdb){Remove-Item -LiteralPath $pdb}
-Get-Item (Join-Path $PSScriptRoot 'publish\win-x64\GearPulse.exe') | Select-Object FullName,Length
+Get-Item (Join-Path $OutputPath 'GearPulse.exe') | Select-Object FullName,Length

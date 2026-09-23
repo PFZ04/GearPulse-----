@@ -6,6 +6,7 @@
         ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize"
         WindowStartupLocation="Manual" SnapsToDevicePixels="True">
     <Border CornerRadius="12" Background="#EB1C2028" Padding="12">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <ItemsControl ItemsSource="{Binding VisibleStates}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
@@ -28,6 +29,9 @@
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Icon}" Value="mouse">
                                                 <Setter Property="Data" Value="M20,3 C14,3 11,7 11,13 L11,28 C11,34 15,37 20,37 C25,37 29,34 29,28 L29,13 C29,7 26,3 20,3 Z M20,4 L20,17 M15,19 L25,19" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Icon}" Value="keyboard">
+                                                <Setter Property="Data" Value="M3,13 L37,13 37,29 3,29 Z M8,18 L11,18 M15,18 L18,18 M22,18 L25,18 M29,18 L32,18 M8,23 L11,23 M15,23 L18,23 M22,23 L25,23 M29,23 L32,23 M12,27 L28,27" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -57,5 +61,6 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+        </ScrollViewer>
     </Border>
 </Window>
