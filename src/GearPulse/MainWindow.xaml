@@ -1,0 +1,61 @@
+<Window x:Class="GearPulse.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GearPulse | 外设脉动" Width="270" Height="88"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize"
+        WindowStartupLocation="Manual" SnapsToDevicePixels="True">
+    <Border CornerRadius="12" Background="#EB1C2028" Padding="12">
+        <ItemsControl ItemsSource="{Binding VisibleStates}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Grid Height="64">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Viewbox Grid.Column="0" Width="40" Height="40" VerticalAlignment="Center">
+                            <Path Width="40" Height="40" Fill="Transparent"
+                                  Stroke="#DCE8F5" StrokeThickness="2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                                <Path.Style>
+                                    <Style TargetType="Path">
+                                        <Setter Property="Data" Value="M6,12 L32,12 32,29 6,29 Z M35,17 L35,24 M13,17 L13,24 M18,17 L18,24" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Icon}" Value="headset">
+                                                <Setter Property="Data" Value="M7,23 C7,12 12,6 20,6 C28,6 33,12 33,23 M5,22 L12,22 12,34 5,34 Z M28,22 L35,22 35,34 28,34 Z M32,30 C30,36 24,37 20,34" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Icon}" Value="mouse">
+                                                <Setter Property="Data" Value="M20,3 C14,3 11,7 11,13 L11,28 C11,34 15,37 20,37 C25,37 29,34 29,28 L29,13 C29,7 26,3 20,3 Z M20,4 L20,17 M15,19 L25,19" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Path.Style>
+                            </Path>
+                        </Viewbox>
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" Foreground="#DAE1EC"
+                                       FontFamily="Segoe UI" FontSize="9" FontWeight="Bold"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding StatusText}"
+                                       FontFamily="Segoe UI" FontSize="12" Margin="0,5,0,0"
+                                       TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="White" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsLow}" Value="True">
+                                                <Setter Property="Foreground" Value="#FF9740" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Border>
+</Window>

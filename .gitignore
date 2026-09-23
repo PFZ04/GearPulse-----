@@ -1,0 +1,27 @@
+# Per-machine runtime data, HID captures, and desktop screenshots.
+/state/
+/logs/
+/Codex 图像 2026年9月23日 21_17_55.png
+/.dotnet/
+/.dotnet-sdk.zip
+/.dotnet-home/
+/.nuget-packages/
+/.nuget-feed/
+**/bin/
+**/obj/
+/publish/
+
+# Notes and files from the retired Wallpaper Engine integration. They remain
+# locally for recovery, but are not part of the portable widget distribution.
+/CURRENT-TASK.md
+/VERIFICATION.md
+/WIDGET-VERIFICATION.md
+/WALLPAPER-HISTORY.md
+/WALLPAPER-README.md
+/wallpaper-layout.json
+/WallpaperBattery.Common.ps1
+/Install-WallpaperBattery.ps1
+/Start-WallpaperBattery.ps1
+/Stop-WallpaperBattery.ps1
+/Remove-WallpaperBattery.ps1
+/Test-WallpaperBattery.ps1
