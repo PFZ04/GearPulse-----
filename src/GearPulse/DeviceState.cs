@@ -1,5 +1,7 @@
 namespace GearPulse;
 
+public enum BatteryLevel { Empty, Low, Medium, Full }
+
 public sealed record DeviceState(
     string Id,
     string Name,
@@ -12,8 +14,9 @@ public sealed record DeviceState(
     Guid ContainerId = default)
 {
     public bool HideUnreadableInformation { get; init; }
+    public BatteryLevel? BatteryGrade { get; init; }
     public bool IsVisible => Status != "hidden";
-    public bool IsLow => Battery is >= 0 and <= 20;
+    public bool IsLow => Battery is >= 0 and <= 20 || Battery is null && BatteryGrade is BatteryLevel.Empty or BatteryLevel.Low;
     public string StatusText => UiLanguage.StatusText(this, HideUnreadableInformation);
 }
 
@@ -118,6 +121,7 @@ public static class DeviceRoster
         new AtkBatteryProvider(),
         new LogitechBatteryProvider(),
         new G522BatteryProvider(),
+        new GamepadBatteryProvider(),
         new AudioHeadsetProvider()
     ];
 

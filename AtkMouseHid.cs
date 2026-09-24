@@ -53,7 +53,7 @@ public static class AtkMouseHid
     public static Device[] EnumerateAll() => EnumerateCore(false, 0x373b, 0x3554);
 
     // Shared read-only HID enumeration for Razer's standard feature-report interface.
-    public static Device[] EnumerateVendor(int vendor) => vendor == 0x1532
+    public static Device[] EnumerateVendor(int vendor) => vendor is 0x1532 or 0x3537
         ? EnumerateCore(false, vendor) : throw new ArgumentOutOfRangeException(nameof(vendor));
 
     public static bool IsBatteryInterface(Device device) => device != null &&
@@ -81,7 +81,9 @@ public static class AtkMouseHid
                     var info = new DeviceInfoData { Size=Marshal.SizeOf<DeviceInfoData>() };
                     if (!SetupDiGetDeviceInterfaceDetailW(set, ref data, detail, needed, out needed, ref info)) throw new Win32Exception();
                     string path = Marshal.PtrToStringUni(IntPtr.Add(detail, 4));
-                    if (path==null || !vendors.Any(v => path.Contains($"vid_{v:x4}&pid_",StringComparison.OrdinalIgnoreCase))) continue;
+                    if (path==null || !vendors.Any(v =>
+                        path.Contains($"vid_{v:x4}&pid_",StringComparison.OrdinalIgnoreCase) ||
+                        path.Contains($"vid&0002{v:x4}_pid&",StringComparison.OrdinalIgnoreCase))) continue;
                     using (var h = CreateFileW(path, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero)) {
                         if (h.IsInvalid) continue;
                         var a = new Attributes { Size=Marshal.SizeOf<Attributes>() };

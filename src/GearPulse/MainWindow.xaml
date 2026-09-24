@@ -45,6 +45,9 @@
                                             <DataTrigger Binding="{Binding Icon}" Value="keyboard">
                                                 <Setter Property="Data" Value="M3,13 L37,13 37,29 3,29 Z M8,18 L11,18 M15,18 L18,18 M22,18 L25,18 M29,18 L32,18 M8,23 L11,23 M15,23 L18,23 M22,23 L25,23 M29,23 L32,23 M12,27 L28,27" />
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding Icon}" Value="gamepad">
+                                                <Setter Property="Data" Value="M12,15 L28,15 C32,15 34,17 35,21 L37,29 C38,33 35,35 32,32 L27,28 13,28 8,32 C5,35 2,33 3,29 L5,21 C6,17 8,15 12,15 Z M10,21 L18,21 M14,17 L14,25 M27,20 L27,21 M31,23 L31,24" />
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Path.Style>

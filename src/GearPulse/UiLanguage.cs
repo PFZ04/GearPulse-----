@@ -117,7 +117,7 @@ public static class UiLanguage
             TraditionalChinese => "未發現裝置",
             _ => "未发现设备"
         };
-        if (hideUnreadableInformation && state.Battery is null) return "";
+        if (hideUnreadableInformation && state.Battery is null && state.BatteryGrade is null) return "";
         if (state.Status == "mouse_offline") return Current switch
         {
             English => "Mouse disconnected or asleep",
@@ -136,19 +136,27 @@ public static class UiLanguage
             TraditionalChinese => "接收器未連接",
             _ => "接收器未连接"
         };
-        if (state.Battery is null) return Current switch
+        if (state.Battery is null && state.BatteryGrade is null) return Current switch
         {
             English => state.Status == "device_busy" ? "Device is being read" : "Battery unavailable",
             TraditionalChinese => state.Status == "device_busy" ? "正在讀取裝置" : "電量暫不可用",
             _ => state.Status == "device_busy" ? "设备正在被读取" : "电量暂不可用"
         };
-        if (hideUnreadableInformation && state.Charging is null) return $"{state.Battery}%";
+        var amount = state.Battery is int percentage ? $"{percentage}%" : state.BatteryGrade switch
+        {
+            BatteryLevel.Empty => Current switch { English => "Empty", TraditionalChinese => "電量耗盡", _ => "电量耗尽" },
+            BatteryLevel.Low => Current switch { English => "Low", TraditionalChinese => "電量低", _ => "电量低" },
+            BatteryLevel.Medium => Current switch { English => "Medium", TraditionalChinese => "電量中", _ => "电量中" },
+            BatteryLevel.Full => Current switch { English => "Full", TraditionalChinese => "電量滿", _ => "电量满" },
+            _ => ""
+        };
+        if (hideUnreadableInformation && state.Charging is null) return amount;
         var charging = state.Charging switch
         {
             true => Current switch { English => "Charging", TraditionalChinese => "充電中", _ => "充电中" },
             false => Current switch { English => "Not charging", TraditionalChinese => "未充電", _ => "未充电" },
             null => Current switch { English => "Charging status unknown", TraditionalChinese => "充電狀態未知", _ => "充电状态未知" }
         };
-        return $"{state.Battery}% · {charging}";
+        return $"{amount} · {charging}";
     }
 }

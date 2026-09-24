@@ -12,7 +12,7 @@ public static class AtkDeviceDiscovery
 {
     public sealed record Node(Guid ContainerId, string InstanceId, int Vendor, int Product,
         string Name, string Manufacturer, string DeviceClass, int? Battery = null,
-        bool? Connected = null);
+        bool? Connected = null, string HardwareIds = "");
     public sealed record Peripheral(string Id, Guid ContainerId, int Vendor, int Product,
         string Name, string Icon);
 
@@ -48,6 +48,7 @@ public static class AtkDeviceDiscovery
     private static readonly Guid BatteryFormat = new("49cd1f76-5626-4b17-a4e8-18b4aa1a2213");
     private static readonly Guid BluetoothBatteryFormat = new("104ea319-6ee2-4701-bd47-8ddbf425bbe5");
     private static readonly Guid ConnectedFormat = new("78c34fc8-104a-4aca-9ea4-524d52996e57");
+    private static readonly Guid AepConnectedFormat = new("a35996ab-11cf-4935-8b61-a6761081ecdf");
     // Published receiver and cable IDs for the shared Compx mouse families.
     // The silicon is shared by unrelated brands, so never admit a whole VID.
     private static readonly HashSet<(int Vendor, int Product)> KnownMouseIds =
@@ -71,6 +72,15 @@ public static class AtkDeviceDiscovery
             (uint)buffer.Length, out var used)) return "";
         return Encoding.Unicode.GetString(buffer, 0, Math.Min((int)used, buffer.Length))
             .Split('\0', 2)[0].Trim();
+    }
+
+    private static string RegistryMultiString(IntPtr set, ref DeviceInfoData info, uint property)
+    {
+        var buffer = new byte[2048];
+        if (!SetupDiGetDeviceRegistryPropertyW(set, ref info, property, out _, buffer,
+            (uint)buffer.Length, out var used)) return "";
+        return Encoding.Unicode.GetString(buffer, 0, Math.Min((int)used, buffer.Length))
+            .Replace('\0', '|');
     }
 
     private static byte? DeviceByte(IntPtr set, ref DeviceInfoData info, Guid format, uint id, uint expectedType)
@@ -111,11 +121,14 @@ public static class AtkDeviceDiscovery
                 if (name.Length == 0) name = RegistryString(set, ref info, 0); // SPDRP_DEVICEDESC
                 var bluetooth = id.ToString().StartsWith("BTH", StringComparison.OrdinalIgnoreCase);
                 var battery = bluetooth ? DeviceByte(set, ref info, BluetoothBatteryFormat, 2, 0x3)
-                    ?? DeviceByte(set, ref info, BatteryFormat, 10, 0x3) : null; // DEVPROP_TYPE_BYTE
-                var connected = bluetooth ? DeviceByte(set, ref info, ConnectedFormat, 55, 0x11) : null; // DEVPROP_TYPE_BOOLEAN
+                    ?? DeviceByte(set, ref info, BatteryFormat, 10, 0x3)
+                    : DeviceByte(set, ref info, BatteryFormat, 10, 0x3); // DEVPROP_TYPE_BYTE
+                var connected = bluetooth ? DeviceByte(set, ref info, AepConnectedFormat, 7, 0x11)
+                    ?? DeviceByte(set, ref info, ConnectedFormat, 55, 0x11) : null; // DEVPROP_TYPE_BOOLEAN
                 nodes.Add(new Node(container, id.ToString(), vendor, product, name,
                     RegistryString(set, ref info, 11), RegistryString(set, ref info, 7),
-                    battery <= 100 ? battery : null, connected.HasValue ? connected != 0 : null));
+                    battery <= 100 ? battery : null, connected.HasValue ? connected != 0 : null,
+                    RegistryMultiString(set, ref info, 1)));
             }
         }
         finally { SetupDiDestroyDeviceInfoList(set); }

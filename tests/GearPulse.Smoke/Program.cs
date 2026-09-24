@@ -1,6 +1,26 @@
 using System.Text.Json;
 using GearPulse;
 
+if (args.Contains("--gamepad-diagnostics", StringComparer.OrdinalIgnoreCase))
+{
+    var nodes = AtkDeviceDiscovery.EnumerateNodes(false);
+    foreach (var state in new GamepadBatteryProvider().Read())
+        Console.WriteLine($"{state.Name}: connection={state.Connection}, battery={state.Battery?.ToString() ?? "unknown"}, " +
+            $"grade={state.BatteryGrade?.ToString() ?? "unknown"}, status={state.Status}");
+    foreach (var slot in GamepadBatteryProvider.DiagnosticSlots()) Console.WriteLine("XInput " + slot);
+    foreach (var node in nodes.Where(n => n.Vendor == 0x3537 ||
+        n.Name.Contains("controller", StringComparison.OrdinalIgnoreCase) ||
+        n.Name.Contains("gamepad", StringComparison.OrdinalIgnoreCase) ||
+        n.Name.Contains("GameSir", StringComparison.OrdinalIgnoreCase) ||
+        n.Name.Contains("Flydigi", StringComparison.OrdinalIgnoreCase) ||
+        n.HardwareIds.Contains("HID_DEVICE_UP:0001_U:0005", StringComparison.OrdinalIgnoreCase)))
+        Console.WriteLine($"Node {node.Name}: class={node.DeviceClass}, vid:pid={node.Vendor:X4}:{node.Product:X4}, " +
+            $"bluetooth={node.InstanceId.StartsWith("BTH", StringComparison.OrdinalIgnoreCase)}, " +
+            $"connected={node.Connected?.ToString() ?? "unknown"}, battery={node.Battery?.ToString() ?? "unknown"}, " +
+            $"container={node.ContainerId}");
+    return;
+}
+
 if (args.Contains("--startup-integration", StringComparer.OrdinalIgnoreCase))
 {
     var task = new WindowsStartupTask();
@@ -147,6 +167,13 @@ foreach (var (code, normal, charging, unknown, offline, unavailable) in new[]
     Check((hide with { Charging = null }).StatusText == "85%", $"{code} hide unknown charging");
     Check((hide with { Battery = null, Status = "error" }).StatusText == "", $"{code} hide unknown battery");
     Check((hide with { Battery = null, Status = "mouse_offline" }).StatusText == "", $"{code} hide offline detail");
+    var grade = new DeviceState("pad", "Pad", "gamepad", null, null, true, "ok")
+        { BatteryGrade = BatteryLevel.Low };
+    Check(grade.StatusText.Contains(code == UiLanguage.English ? "Low" : code == UiLanguage.TraditionalChinese ? "電量低" : "电量低"),
+        $"{code} gamepad grade localized");
+    Check((grade with { HideUnreadableInformation = true }).StatusText ==
+        (code == UiLanguage.English ? "Low" : code == UiLanguage.TraditionalChinese ? "電量低" : "电量低"),
+        $"{code} gamepad grade remains visible when unknown detail is hidden");
     Check(hide.StatusText == normal && (hide with { Charging = true }).StatusText == charging,
         $"{code} preserve known charging state");
     Check((new DeviceState("empty", "GearPulse", "battery", null, null, true, "empty")
@@ -203,7 +230,51 @@ Check(WidgetPlacement.Calculate(area, 270, 88, 20, "bottom-right").Location == n
 Check(new WidgetSettings(Size: "small").Scale == .8 && new WidgetSettings(Size: "large").Scale == 1.25, "size presets");
 Check(new DeviceState("x", "X", "mouse", 20, false, true, "ok").IsLow, "20% low threshold");
 Check(!new DeviceState("x", "X", "mouse", 21, false, true, "ok").IsLow, "21% normal threshold");
-Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "razer-peripherals", "atk-peripherals", "logitech-lightspeed", "logitech-g522-lightspeed", "windows-audio-headsets"]), "device order");
+Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "razer-peripherals", "atk-peripherals", "logitech-lightspeed", "logitech-g522-lightspeed", "windows-gamepads", "windows-audio-headsets"]), "device order");
+Check(GamepadBatteryProvider.DecodeXInput(2, 0) == BatteryLevel.Empty &&
+    GamepadBatteryProvider.DecodeXInput(3, 3) == BatteryLevel.Full &&
+    GamepadBatteryProvider.DecodeXInput(1, 3) is null &&
+    GamepadBatteryProvider.DecodeXInput(2, 4) is null, "XInput battery validation");
+var novaReply = new byte[65];
+novaReply[1] = 1; novaReply[2] = 1; novaReply[19] = 79;
+Check(GameSirNovaLite2Hid.ParseBattery(novaReply) == 79, "Nova Lite 2 device-info percentage");
+Check(GameSirNovaLite2Hid.ParseBattery(novaReply.AsSpan(0, 64)) is null &&
+    GameSirNovaLite2Hid.ParseBattery(new byte[65]) is null,
+    "truncated and unrelated Nova reports rejected");
+var invalidNovaReply = (byte[])novaReply.Clone();
+invalidNovaReply[19] = 101;
+Check(GameSirNovaLite2Hid.ParseBattery(invalidNovaReply) is null,
+    "invalid Nova battery percentage rejected");
+invalidNovaReply[19] = 255;
+Check(GameSirNovaLite2Hid.ParseBattery(invalidNovaReply) is null,
+    "Nova wired charging sentinel is not a real percentage");
+var physicalPad = new AtkDeviceDiscovery.Node(Guid.NewGuid(), "USB\\VID_3537&PID_2106", 0x3537, 0x2106,
+    "GameSir Nova 2 Lite", "GameSir", "HIDClass", HardwareIds: "HID_DEVICE_UP:0001_U:0005");
+Check(GamepadDiscovery.Resolve([physicalPad, physicalPad with { InstanceId = "HID\\VID_3537&PID_2106" }]).Count == 1,
+    "physical gamepad interfaces deduplicated");
+Check(GamepadDiscovery.Resolve([physicalPad with { Product = 0x1098 }])[0] is { Name: "GameSir Nova Lite 2", Connection: "wireless" },
+    "verified Nova Lite 2 receiver identity");
+Check(GamepadDiscovery.Resolve([physicalPad with { Product = 0x100f }])[0] is { Name: "GameSir Nova Lite 2", Connection: "wired" },
+    "verified Nova Lite 2 USB cable identity");
+Check(GamepadDiscovery.Resolve([physicalPad with { InstanceId = "ROOT\\VIGEMBUS\\0001" }]).Count == 0,
+    "virtual gamepad excluded");
+Check(GamepadDiscovery.Resolve([physicalPad, physicalPad with { ContainerId = Guid.NewGuid() }]).Count == 2,
+    "two physical gamepads retained");
+var bluetoothPad = new AtkDeviceDiscovery.Node(Guid.NewGuid(), "BTHLE\\Dev_1234", 0, 0,
+    "Xbox Wireless Controller", "Microsoft", "Bluetooth", 71);
+var bluetoothInput = new AtkDeviceDiscovery.Node(bluetoothPad.ContainerId, "HID\\VID_045E&PID_1234", 0x045e, 0x1234,
+    "HID-compliant game controller", "Microsoft", "HIDClass", HardwareIds: "HID_DEVICE_UP:0001_U:0005");
+Check(GamepadDiscovery.Resolve([bluetoothPad, bluetoothInput])[0].Battery == 71, "Bluetooth reported percentage retained");
+Check(GamepadDiscovery.Resolve([bluetoothPad with { Battery = 101 }, bluetoothInput])[0].Battery is null,
+    "invalid Bluetooth percentage rejected");
+Check(GamepadDiscovery.Resolve([bluetoothPad]).Count == 0,
+    "paired Bluetooth parent without active game input hidden");
+Check(GamepadDiscovery.Resolve([bluetoothPad with { Connected = false }, bluetoothInput]).Count == 0,
+    "disconnected Bluetooth gamepad hidden");
+Check((new DeviceState("pad", "Pad", "gamepad", null, null, true, "ok")
+    { BatteryGrade = BatteryLevel.Low }).IsLow, "low gamepad grade highlighted");
+Check(GamepadDiscovery.Resolve([new AtkDeviceDiscovery.Node(Guid.NewGuid(), "USB\\VID_374A&PID_A223", 0x374a, 0xa223,
+    "HID-compliant system controller", "", "HIDClass")]).Count == 0, "system controller excluded");
 Check(DeviceRoster.Initial().Count == 0, "no fixed BlackShark placeholder");
 Check(AudioHeadsetDiscovery.IsHeadset(3, "Headphones (Realtek Audio)"), "headphone form factor");
 Check(AudioHeadsetDiscovery.IsHeadset(5, "Generic Audio"), "headset form factor");
