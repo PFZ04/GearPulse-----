@@ -100,8 +100,9 @@ public sealed class AtkBatteryProvider : IBatteryProvider
             return new(peripheral.Id, peripheral.Name, peripheral.Icon, null, null, true,
                 "unavailable", peripheral.Icon == "headset" ? "wireless" : "", peripheral.ContainerId);
         var valid = sample.Status == "ok";
-        var name = valid && !string.IsNullOrWhiteSpace(sample.Name) && sample.Name != "ATK MOUSE"
-            ? sample.Name : peripheral.Name;
+        var confirmedName = sample.Cid is int cid && sample.Mid is int mid
+            ? AtkMouseHid.KnownMouseName(cid, mid) : null;
+        var name = valid && confirmedName is not null ? confirmedName : peripheral.Name;
         return new(peripheral.Id, name, "mouse", valid ? sample.Battery : null,
             valid ? sample.Charging : null, true, sample.Status, "", peripheral.ContainerId);
     }

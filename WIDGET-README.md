@@ -1,6 +1,6 @@
 # GearPulse 桌面小组件
 
-当前正式运行版本为 **V1.2**；本次耳机识别候选版本为 **V1.3**（产品版本 `1.3.0`，Windows 文件版本 `1.3.0.0`）。同一发布包包含外观设置、通用 ATK／VXE／VGN 设备支持和简体中文、English、繁體中文界面。
+当前本机发布目录仍为 **V1.2**；**V1.3** 已通过实机验证；本次 A9 Mini+ 与其他接收器防误标修复的独立候选版本为 **V1.3.2**（产品版本 `1.3.2`，Windows 文件版本 `1.3.2.0`），位于 `publish/1.3.2-candidate/GearPulse.exe`。同一发布包包含外观设置、通用 ATK／VXE／VGN 设备支持和简体中文、English、繁體中文界面。
 
 WPF 卡片位于主屏右下角、任务栏上方。它不抢焦点，不占任务栏或 Alt+Tab；普通窗口可遮挡它。卡片每 10 秒读取一次电量并重新发现当前 Windows 耳机与 ATK／VXE／VGN USB 外设，罗技 HID++ 设备每 45 秒重新发现，接收器拔出后隐藏对应行。多行超出屏幕可用高度时可以滚动。支持 BlackShark V2 Pro、G522 LIGHTSPEED 接收器、ATK／VXE／VGN 设备，以及通过 HID++ LIGHTSPEED 接收器连接并报告真实百分比的罗技鼠标和键盘。Windows 能识别为耳机但没有已验证电量协议的设备显示系统名称和“电量暂不可用”；3.5 mm 模拟耳机可能只有声卡接口名称。没有任何设备时显示“未发现设备”。托盘菜单提供显示／隐藏、开机启动和退出。
 
@@ -40,4 +40,4 @@ pwsh -NoProfile -File .\Install-LegacyBatteryWidget.ps1
 
 ### ATK A9 Mini+ 识别检查
 
-`dotnet run --project .\tests\GearPulse.Smoke\GearPulse.Smoke.csproj -c Release -- --atk-diagnostics` 列出 ATK 接收器 ID、接口规格，以及已验证 17 字节接口的只读在线、身份和电量查询结果；不输出设备路径或序列号，不对其他接口发送命令。A9 Mini+ 通过 2.4G 连接并唤醒后，检查其 `CID/MID`、状态和电量，并与 ATK HUB 对照。身份尚未确认或鼠标休眠时，卡片显示接收器名称，不把 `373B:1278` 当作 F1 V3。通过 USB 数据线连接时，检查 A9 Mini+ 显示鼠标图标。未取得有效无线应答前不为 A9 Mini+ 添加推测的身份映射或电量协议。
+`dotnet run --project .\tests\GearPulse.Smoke\GearPulse.Smoke.csproj -c Release -- --atk-diagnostics` 列出 ATK 接收器 ID、接口规格，以及已验证 17 字节接口的只读在线、身份和电量查询结果；不输出设备路径或序列号，不对其他接口发送命令。A9 Mini+ 通过 2.4G 连接并唤醒后，检查其 `CID/MID`、状态和电量，并与 ATK HUB 对照。所有已收录的 ATK／VXE／VGN 鼠标 ID 只用于发现设备；能从设备描述识别出的接收器显示中性名称，不根据接收器 ID 或带型号的接收器描述推断当前配对鼠标。只有已验证的鼠标身份应答才显示对应无线型号，休眠或查询失败时清除旧型号和电量。无法从描述区分接收器与有线鼠标的型号仍需实机核对。通过 USB 数据线连接时，检查 A9 Mini+ 显示鼠标图标。未取得有效无线应答前不为 A9 Mini+ 添加推测的身份映射或电量协议。

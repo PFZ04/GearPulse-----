@@ -46,21 +46,19 @@ public static class AtkDeviceDiscovery
     private static readonly Guid ContainerFormat = new("8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c");
     // Published receiver and cable IDs for the shared Compx mouse families.
     // The silicon is shared by unrelated brands, so never admit a whole VID.
-    private static readonly Dictionary<(int Vendor, int Product), string> MouseModels = new()
-    {
-        [(0x373b, 0x1278)] = "ATK 8K Receiver",
-        [(0x373b, 0x10c9)] = "ATK NANO Receiver",
-        [(0x373b, 0x1031)] = "ATK F1 Ultimate", [(0x373b, 0x102e)] = "ATK F1 Ultimate",
-        [(0x373b, 0x11d9)] = "ATK A9 Ultimate", [(0x373b, 0x11b6)] = "ATK A9 Ultimate",
-        [(0x373b, 0x104d)] = "VXE MAD R", [(0x373b, 0x103f)] = "VXE MAD R",
-        [(0x373b, 0x1040)] = "VXE MAD R Major Plus", [(0x373b, 0x104c)] = "VXE MAD R Major Plus",
-        [(0x3554, 0xf58a)] = "VXE R1 Pro Max", [(0x3554, 0xf58c)] = "VXE R1 Pro Max",
-        [(0x3554, 0xf58e)] = "VXE R1 SE+", [(0x3554, 0xf58f)] = "VXE R1 SE+",
-        [(0x3554, 0xf503)] = "VGN F1 Pro", [(0x3554, 0xf502)] = "VGN F1 Pro",
-        [(0x3554, 0xfb3e)] = "VGN F2 Pro Max", [(0x3554, 0xfb3d)] = "VGN F2 Pro Max",
-        [(0x373b, 0x1155)] = "ATK Zero", [(0x373b, 0x124f)] = "ATK Zero",
-        [(0x373b, 0x1154)] = "ATK Zero"
-    };
+    private static readonly HashSet<(int Vendor, int Product)> KnownMouseIds =
+    [
+        (0x373b, 0x1278), (0x373b, 0x10c9),
+        (0x373b, 0x1031), (0x373b, 0x102e),
+        (0x373b, 0x11d9), (0x373b, 0x11b6),
+        (0x373b, 0x104d), (0x373b, 0x103f),
+        (0x373b, 0x1040), (0x373b, 0x104c),
+        (0x3554, 0xf58a), (0x3554, 0xf58c),
+        (0x3554, 0xf58e), (0x3554, 0xf58f),
+        (0x3554, 0xf503), (0x3554, 0xf502),
+        (0x3554, 0xfb3e), (0x3554, 0xfb3d),
+        (0x373b, 0x1155), (0x373b, 0x124f), (0x373b, 0x1154)
+    ];
 
     private static string RegistryString(IntPtr set, ref DeviceInfoData info, uint property)
     {
@@ -127,19 +125,20 @@ public static class AtkDeviceDiscovery
                 var items = group.ToArray();
                 var branded = items.Any(n => Brand.IsMatch(n.Name) || Brand.IsMatch(n.Manufacturer));
                 var known = items.Select(n => (n.Vendor, n.Product))
-                    .FirstOrDefault(id => MouseModels.ContainsKey(id));
-                var hasKnown = MouseModels.ContainsKey(known);
+                    .FirstOrDefault(id => KnownMouseIds.Contains(id));
+                var hasKnown = KnownMouseIds.Contains(known);
                 if (!branded && !hasKnown) return null;
-                // A descriptive receiver/product string wins over generic USB or HID labels.
+                // Receiver labels describe the dongle, not the paired mouse.
                 var best = items.OrderByDescending(n => NameScore(n.Name)).First();
                 var sharedReceiver = known is (0x373b, 0x1278) or (0x373b, 0x10c9);
-                var name = sharedReceiver ? AtkMouseHid.ReceiverName(known.Vendor, known.Product, best.Name) :
-                    hasKnown ? MouseModels[known] :
-                    NameScore(best.Name) > 0 ? best.Name :
-                    $"ATK/VXE/VGN {best.Vendor:X4}:{best.Product:X4}";
-                var icon = hasKnown || items.Any(n => n.DeviceClass.Equals("Mouse", StringComparison.OrdinalIgnoreCase) ||
+                var mouseLike = hasKnown || items.Any(n => n.DeviceClass.Equals("Mouse", StringComparison.OrdinalIgnoreCase) ||
                     n.Name.Contains("A9 Mini", StringComparison.OrdinalIgnoreCase) ||
-                    n.Name.Contains("mouse", StringComparison.OrdinalIgnoreCase) && Brand.IsMatch(n.Name)) ? "mouse" :
+                    n.Name.Contains("mouse", StringComparison.OrdinalIgnoreCase) && Brand.IsMatch(n.Name));
+                var receiver = mouseLike && (sharedReceiver || items.Any(n => AtkMouseHid.IsReceiverDescriptor(n.Name)));
+                var name = receiver ? AtkMouseHid.ReceiverName(best.Vendor, best.Product, best.Name) :
+                    NameScore(best.Name) > 0 ? best.Name :
+                    $"ATK/VXE/VGN Mouse {best.Vendor:X4}:{best.Product:X4}";
+                var icon = mouseLike ? "mouse" :
                     items.Any(n => n.DeviceClass.Equals("Media", StringComparison.OrdinalIgnoreCase) ||
                     n.Name.Contains("headset", StringComparison.OrdinalIgnoreCase) ||
                     n.Name.Contains("耳机", StringComparison.OrdinalIgnoreCase)) ? "headset" :

@@ -242,7 +242,9 @@ Check(AtkMouseHid.KnownMouseName(1, 62) == "ATK F1 V3 ULTIMATE+", "F1 identity m
 Check(AtkMouseHid.KnownMouseName(2, 83) == "ATK A9 PLUS NK", "independent A9 Plus identity mapping");
 Check(AtkMouseHid.KnownMouseName(1, 31) is null, "unverified A9 Mini+ identity not guessed");
 Check(AtkMouseHid.ReceiverName(0x373b, 0x1278, "Wireless mouse 8k dongle-L") ==
-    "Wireless mouse 8k dongle-L", "shared receiver uses its product string");
+    "ATK 8K Receiver", "shared receiver name stays neutral");
+Check(AtkMouseHid.ReceiverName(0x373b, 0x1031, "ATK F1 Ultimate Receiver") ==
+    "ATK Receiver", "other ATK receiver product string cannot assert paired model");
 Check(AtkMouseHid.ValidChecksum(AtkMouseHid.QueryFrame(4)), "ATK report checksum");
 var corruptedAtk = AtkMouseHid.QueryFrame(4);
 corruptedAtk[5]++;
@@ -266,7 +268,7 @@ var atkResolved = AtkDeviceDiscovery.Resolve(atkNodes);
 Check(atkResolved.Count == 6, "ATK multi-interface dedup and unrelated Compx exclusion");
 Check(atkResolved.Count(p => p.Name == "ATK 8K Receiver") == 2, "shared receiver does not claim F1 identity");
 Check(atkResolved.Select(p => p.Id).Distinct().Count() == 6, "ATK ids unique by container");
-Check(atkResolved.Any(p => p.Name == "VXE R1 Pro Max" && p.Icon == "mouse"), "published receiver ID admitted");
+Check(atkResolved.Any(p => p.Name == "ATK/VXE/VGN Receiver" && p.Icon == "mouse"), "published receiver ID admitted without model claim");
 Check(atkResolved.Any(p => p.Name == "ATK68 V3" && p.Icon == "keyboard"), "compact ATK model name admitted");
 Check(atkResolved.Any(p => p.Name == "VXE K75 Receiver" && p.Icon == "keyboard"), "unknown keyboard uses receiver name");
 Check(atkResolved.Any(p => p.Name == "ATK Headset" && p.Icon == "headset"), "headset discovery");
@@ -276,17 +278,35 @@ var asleep = AtkBatteryProvider.ToState(sharedReceiver, new AtkMouseHid.Result
 Check(asleep.Name == "ATK 8K Receiver" && asleep.Battery is null && asleep.Charging is null,
     "receiver swap or sleep clears stale mouse identity and battery");
 var awake = AtkBatteryProvider.ToState(sharedReceiver, new AtkMouseHid.Result
-    { Status = "ok", Name = "ATK F1 V3 ULTIMATE+", Battery = 90, Charging = false });
+    { Status = "ok", Cid = 1, Mid = 62, Name = "ATK F1 V3 ULTIMATE+", Battery = 90, Charging = false });
 Check(awake.Name == "ATK F1 V3 ULTIMATE+" && awake.Battery == 90,
     "verified paired mouse identity replaces receiver label");
 var unknownMouse = AtkBatteryProvider.ToState(sharedReceiver, new AtkMouseHid.Result
     { Status = "ok", Name = "ATK 8K Receiver", Battery = 55, Charging = null });
 Check(unknownMouse.Name == "ATK 8K Receiver" && unknownMouse.Battery == 55,
     "unknown paired mouse retains receiver label and valid battery");
+var unknownIdentity = AtkBatteryProvider.ToState(sharedReceiver, new AtkMouseHid.Result
+    { Status = "error", Cid = 1, Mid = 31, Name = "ATK F1 V3 ULTIMATE+", Battery = 90 });
+Check(unknownIdentity.Name == "ATK 8K Receiver" && unknownIdentity.Battery is null,
+    "failed identity or battery query cannot retain a previous model or percentage");
+foreach (var product in new[] { 0x1031, 0x11d9, 0x104d })
+{
+    var otherReceiver = AtkDeviceDiscovery.Resolve([
+        new(Guid.NewGuid(), $"USB\\VID_373B&PID_{product:X4}\\R", 0x373b, product,
+            "ATK F1 Ultimate Receiver", "ATK", "Mouse")
+    ]).Single();
+    Check(otherReceiver.Name == "ATK Receiver" && otherReceiver.Icon == "mouse",
+        "other ATK receiver ID does not assign a fixed paired model");
+}
+var wiredKnown = AtkDeviceDiscovery.Resolve([
+    new(Guid.NewGuid(), "USB\\VID_373B&PID_1031\\W", 0x373b, 0x1031,
+        "ATK F1 Ultimate", "ATK", "Mouse")
+]).Single();
+Check(wiredKnown.Name == "ATK F1 Ultimate", "descriptive wired product name remains available");
 var a9Receiver = new AtkDeviceDiscovery.Peripheral("a9", Guid.NewGuid(), 0x373b, 0x10c9,
     "ATK NANO Receiver", "mouse");
 var a9Plus = AtkBatteryProvider.ToState(a9Receiver, new AtkMouseHid.Result
-    { Status = "ok", Name = "ATK A9 PLUS NK", Battery = 80, Charging = false });
+    { Status = "ok", Cid = 2, Mid = 83, Name = "ATK A9 PLUS NK", Battery = 80, Charging = false });
 Check(a9Plus.Name == "ATK A9 PLUS NK" && a9Plus.Battery == 80,
     "separate A9 Plus remains identified");
 var wiredContainer = Guid.NewGuid();

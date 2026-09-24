@@ -209,15 +209,20 @@ public static class AtkMouseHid
         cid==1 && mid==85 ? "ATK F1 V3 ULTIMATE" :
         cid==2 && mid==83 ? "ATK A9 PLUS NK" : null;
 
+    public static bool IsReceiverDescriptor(string productName) =>
+        !string.IsNullOrWhiteSpace(productName) &&
+        (productName.Contains("dongle",StringComparison.OrdinalIgnoreCase) ||
+         productName.Contains("receiver",StringComparison.OrdinalIgnoreCase) ||
+         productName.Contains("接收器",StringComparison.OrdinalIgnoreCase));
+
     public static string ReceiverName(int vendor, int product, string productName)
     {
-        if (!string.IsNullOrWhiteSpace(productName) &&
-            (productName.Contains("dongle",StringComparison.OrdinalIgnoreCase) ||
-             productName.Contains("receiver",StringComparison.OrdinalIgnoreCase) ||
-             productName.Contains("接收器",StringComparison.OrdinalIgnoreCase)))
-            return productName.Trim();
-        return vendor==0x373b && product==0x1278 ? "ATK 8K Receiver" :
-            vendor==0x373b && product==0x10c9 ? "ATK NANO Receiver" : "ATK Receiver";
+        if (vendor==0x373b && product==0x1278) return "ATK 8K Receiver";
+        if (vendor==0x373b && product==0x10c9) return "ATK NANO Receiver";
+        if (productName?.Contains("VXE",StringComparison.OrdinalIgnoreCase)==true) return "VXE Receiver";
+        if (productName?.Contains("VGN",StringComparison.OrdinalIgnoreCase)==true) return "VGN Receiver";
+        if (productName?.Contains("ATK",StringComparison.OrdinalIgnoreCase)==true) return "ATK Receiver";
+        return "ATK/VXE/VGN Receiver";
     }
 
     public static Result[] SampleAll(int timeout=1000)
