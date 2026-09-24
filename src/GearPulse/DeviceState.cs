@@ -7,7 +7,9 @@ public sealed record DeviceState(
     int? Battery,
     bool? Charging,
     bool ReceiverPresent,
-    string Status)
+    string Status,
+    string Connection = "",
+    Guid ContainerId = default)
 {
     public bool IsVisible => Status != "hidden";
     public bool IsLow => Battery is >= 0 and <= 20;
@@ -33,19 +35,22 @@ public sealed class BlackSharkBatteryProvider : IBatteryProvider
             bool held;
             try { held = mutex.WaitOne(0); }
             catch (AbandonedMutexException) { held = true; }
-            if (!held) return [new(Id, name, "headset", null, null, true, "device_busy")];
+            if (!held) return BlackSharkHid.Enumerate().Length == 0 ? [] :
+                [new(Id, name, "headset", null, null, true, "device_busy", "wireless")];
             try
             {
                 var sample = BlackSharkHid.Sample(1000);
+                if (!sample.ReceiverPresent) return [];
                 return [new(Id, name, "headset", sample.Battery, sample.Charging,
-                    sample.ReceiverPresent, sample.Status)];
+                    sample.ReceiverPresent, sample.Status, "wireless",
+                    AtkDeviceDiscovery.UniqueContainer(0x1532, 0x0555))];
             }
             finally { mutex.ReleaseMutex(); }
         }
         catch (Exception error)
         {
             AppLog.Write("BlackShark sample failed", error);
-            return [new(Id, name, "headset", null, null, true, "error")];
+            return [];
         }
     }
 }
@@ -78,13 +83,8 @@ public sealed class AtkBatteryProvider : IBatteryProvider
                 if (hid is null && peripheral.ContainerId == Guid.Empty)
                     hid = mouseInterfaces.FirstOrDefault(device => device.Vendor == peripheral.Vendor &&
                         device.Product == peripheral.Product);
-                if (hid is null || peripheral.Icon != "mouse")
-                    return new DeviceState(peripheral.Id, peripheral.Name, peripheral.Icon,
-                        null, null, true, "unavailable");
-                var sample = AtkMouseHid.Sample(hid, 1000);
-                var name = sample.Name is null or "ATK MOUSE" ? peripheral.Name : sample.Name;
-                return new DeviceState(peripheral.Id, name, "mouse", sample.Battery,
-                    sample.Charging, true, sample.Status);
+                return ToState(peripheral, hid is not null && peripheral.Icon == "mouse"
+                    ? AtkMouseHid.Sample(hid, 1000) : null);
             }).ToArray();
         }
         catch (Exception error)
@@ -92,6 +92,18 @@ public sealed class AtkBatteryProvider : IBatteryProvider
             AppLog.Write("ATK device discovery failed", error);
             return [];
         }
+    }
+
+    public static DeviceState ToState(AtkDeviceDiscovery.Peripheral peripheral, AtkMouseHid.Result? sample)
+    {
+        if (sample is null)
+            return new(peripheral.Id, peripheral.Name, peripheral.Icon, null, null, true,
+                "unavailable", peripheral.Icon == "headset" ? "wireless" : "", peripheral.ContainerId);
+        var valid = sample.Status == "ok";
+        var name = valid && !string.IsNullOrWhiteSpace(sample.Name) && sample.Name != "ATK MOUSE"
+            ? sample.Name : peripheral.Name;
+        return new(peripheral.Id, name, "mouse", valid ? sample.Battery : null,
+            valid ? sample.Charging : null, true, sample.Status, "", peripheral.ContainerId);
     }
 }
 
@@ -101,16 +113,36 @@ public static class DeviceRoster
     [
         new BlackSharkBatteryProvider(),
         new AtkBatteryProvider(),
-        new LogitechBatteryProvider()
+        new LogitechBatteryProvider(),
+        new G522BatteryProvider(),
+        new AudioHeadsetProvider()
     ];
 
-    public static IReadOnlyList<DeviceState> Initial() =>
-    [
-        new("blackshark-v2-pro", "BLACKSHARK V2 PRO", "headset", null, null, true, "pending")
-    ];
+    public static IReadOnlyList<DeviceState> Initial() => [];
 
     public static IReadOnlyList<DeviceState> Visible(IEnumerable<DeviceState> states) =>
         states.Where(s => s.IsVisible).ToArray();
+
+    public static IReadOnlyList<DeviceState> Visible(IEnumerable<DeviceState> states, WidgetSettings settings) =>
+        HeadsetRoster.Merge(states).Where(s => s.IsVisible &&
+            (s.Icon != "headset" || s.Connection switch
+            {
+                "wired" => settings.ShowWiredHeadsets,
+                "bluetooth" => settings.ShowBluetoothHeadsets,
+                _ => true
+            })).ToArray();
+}
+
+public sealed class G522BatteryProvider : IBatteryProvider
+{
+    public string Id => "logitech-g522-lightspeed";
+    public IReadOnlyList<DeviceState> Read() => G522Hid.Sample();
+}
+
+public sealed class AudioHeadsetProvider : IBatteryProvider
+{
+    public string Id => "windows-audio-headsets";
+    public IReadOnlyList<DeviceState> Read() => AudioHeadsetDiscovery.Sample();
 }
 
 public sealed class LogitechBatteryProvider : IBatteryProvider

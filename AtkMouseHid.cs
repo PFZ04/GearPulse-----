@@ -46,7 +46,16 @@ public static class AtkMouseHid
     public sealed class Device { public string Path { get; set; } public int InputLength { get; set; } public int OutputLength { get; set; } public int FeatureLength { get; set; } public int UsagePage { get; set; } public int Usage { get; set; } public int Vendor { get; set; } public int Product { get; set; } public Guid ContainerId { get; set; } public string ProductName { get; set; } public string ManufacturerName { get; set; } }
     public sealed class Result { public string Status { get; set; } = "unavailable"; public bool ReceiverPresent { get; set; } public bool? Online { get; set; } public int? Battery { get; set; } public bool? Charging { get; set; } public int? Cid { get; set; } public int? Mid { get; set; } public string Name { get; set; } public string Error { get; set; } public Device Device { get; set; } }
 
-    public static Device[] Enumerate()
+    public static Device[] Enumerate() => EnumerateCore(true);
+
+    // Diagnostics can inspect other ATK collections without sending a report to them.
+    public static Device[] EnumerateAll() => EnumerateCore(false);
+
+    public static bool IsBatteryInterface(Device device) => device != null &&
+        device.UsagePage==0xff02 && device.Usage==2 &&
+        device.InputLength==17 && device.OutputLength==17;
+
+    static Device[] EnumerateCore(bool batteryOnly)
     {
         HidD_GetHidGuid(out Guid guid);
         IntPtr set = SetupDiGetClassDevsW(ref guid, null, IntPtr.Zero, 0x12);
@@ -75,7 +84,7 @@ public static class AtkMouseHid
                         if (!HidD_GetPreparsedData(h, out IntPtr p)) continue;
                         try {
                             if (HidP_GetCaps(p, out Caps c)!=0x110000) continue;
-                            if (c.UsagePage==0xff02 && c.Usage==2 && c.Input==17 && c.Output==17) {
+                            if (!batteryOnly || (c.UsagePage==0xff02 && c.Usage==2 && c.Input==17 && c.Output==17)) {
                                 var key=new PropertyKey { Format=new Guid("8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c"), Id=2 };
                                 var bytes=new byte[16];
                                 Guid container=SetupDiGetDevicePropertyW(set,ref info,ref key,out uint type,bytes,16,out uint ignored,0) && type==0x0000000d ? new Guid(bytes) : Guid.Empty;
@@ -145,8 +154,7 @@ public static class AtkMouseHid
     {
         if (device==null) throw new ArgumentNullException(nameof(device));
         var r=new Result { ReceiverPresent=true, Device=device,
-            Name=device.Vendor==0x373b && device.Product==0x1278 ? "ATK F1 V3 ULTIMATE+" :
-                device.Vendor==0x373b && device.Product==0x10c9 ? "ATK A9 PLUS NK" : "ATK MOUSE" };
+            Name=ReceiverName(device.Vendor,device.Product,device.ProductName) };
         string mutexName=device.Vendor==0x373b && (device.Product==0x1278 || device.Product==0x10c9)
             ? "Local\\AtkMouseBattery-373B-"+device.Product.ToString("X4")
             : "Local\\AtkMouseBattery-"+device.Vendor.ToString("X4")+"-"+device.Product.ToString("X4")+"-"+device.ContainerId.ToString("N");
@@ -175,9 +183,7 @@ public static class AtkMouseHid
                     byte[] identity=Query(h,r.Device,16,timeout);
                     if (identity[1]!=0) throw new InvalidDataException("Mouse identity query failed.");
                     r.Cid=identity[5]; r.Mid=identity[6];
-                    r.Name=r.Cid==1 && r.Mid==62 ? "ATK F1 V3 ULTIMATE+" :
-                        r.Cid==1 && r.Mid==85 ? "ATK F1 V3 ULTIMATE" :
-                        r.Cid==2 && r.Mid==83 ? "ATK A9 PLUS NK" : r.Name;
+                    r.Name=KnownMouseName(r.Cid.Value,r.Mid.Value) ?? r.Name;
                 }
                 byte[] battery=Query(h,r.Device,4,timeout);
                 if (battery[1]!=0 || battery[5]>100 || (!verifiedReceiver && !ValidChecksum(battery)))
@@ -198,6 +204,22 @@ public static class AtkMouseHid
         return (sum&255)==0x55;
     }
 
+    public static string KnownMouseName(int cid, int mid) =>
+        cid==1 && mid==62 ? "ATK F1 V3 ULTIMATE+" :
+        cid==1 && mid==85 ? "ATK F1 V3 ULTIMATE" :
+        cid==2 && mid==83 ? "ATK A9 PLUS NK" : null;
+
+    public static string ReceiverName(int vendor, int product, string productName)
+    {
+        if (!string.IsNullOrWhiteSpace(productName) &&
+            (productName.Contains("dongle",StringComparison.OrdinalIgnoreCase) ||
+             productName.Contains("receiver",StringComparison.OrdinalIgnoreCase) ||
+             productName.Contains("接收器",StringComparison.OrdinalIgnoreCase)))
+            return productName.Trim();
+        return vendor==0x373b && product==0x1278 ? "ATK 8K Receiver" :
+            vendor==0x373b && product==0x10c9 ? "ATK NANO Receiver" : "ATK Receiver";
+    }
+
     public static Result[] SampleAll(int timeout=1000)
     {
         var results=new List<Result>();
@@ -211,6 +233,6 @@ public static class AtkMouseHid
         foreach (var device in Enumerate())
             if (device.Product==product) return Sample(device,timeout);
         return new Result { Status="receiver_absent", ReceiverPresent=false,
-            Name=product==0x1278 ? "ATK F1 V3 ULTIMATE+" : "ATK A9 PLUS NK" };
+            Name=ReceiverName(0x373b,product,null) };
     }
 }

@@ -48,8 +48,8 @@ public static class AtkDeviceDiscovery
     // The silicon is shared by unrelated brands, so never admit a whole VID.
     private static readonly Dictionary<(int Vendor, int Product), string> MouseModels = new()
     {
-        [(0x373b, 0x1278)] = "ATK F1 V3 ULTIMATE+",
-        [(0x373b, 0x10c9)] = "ATK A9 PLUS NK",
+        [(0x373b, 0x1278)] = "ATK 8K Receiver",
+        [(0x373b, 0x10c9)] = "ATK NANO Receiver",
         [(0x373b, 0x1031)] = "ATK F1 Ultimate", [(0x373b, 0x102e)] = "ATK F1 Ultimate",
         [(0x373b, 0x11d9)] = "ATK A9 Ultimate", [(0x373b, 0x11b6)] = "ATK A9 Ultimate",
         [(0x373b, 0x104d)] = "VXE MAD R", [(0x373b, 0x103f)] = "VXE MAD R",
@@ -71,7 +71,7 @@ public static class AtkDeviceDiscovery
             .Split('\0', 2)[0].Trim();
     }
 
-    public static IReadOnlyList<Node> EnumerateNodes()
+    public static IReadOnlyList<Node> EnumerateNodes(bool usbOnly = true)
     {
         var set = SetupDiGetClassDevsW(IntPtr.Zero, null, IntPtr.Zero, 0x06); // PRESENT | ALLCLASSES
         if (set == new IntPtr(-1)) throw new Win32Exception();
@@ -90,9 +90,9 @@ public static class AtkDeviceDiscovery
                 var id = new StringBuilder(512);
                 if (!SetupDiGetDeviceInstanceIdW(set, ref info, id, (uint)id.Capacity, out _)) continue;
                 var match = UsbId.Match(id.ToString());
-                if (!match.Success) continue;
-                var vendor = Convert.ToInt32(match.Groups[1].Value, 16);
-                var product = Convert.ToInt32(match.Groups[2].Value, 16);
+                if (usbOnly && !match.Success) continue;
+                var vendor = match.Success ? Convert.ToInt32(match.Groups[1].Value, 16) : 0;
+                var product = match.Success ? Convert.ToInt32(match.Groups[2].Value, 16) : 0;
                 var key = new PropertyKey { Format = ContainerFormat, Id = 2 };
                 var bytes = new byte[16];
                 var container = SetupDiGetDevicePropertyW(set, ref info, ref key, out var type,
@@ -105,6 +105,17 @@ public static class AtkDeviceDiscovery
         }
         finally { SetupDiDestroyDeviceInfoList(set); }
         return nodes;
+    }
+
+    public static Guid UniqueContainer(int vendor, int product)
+    {
+        try
+        {
+            var containers = EnumerateNodes().Where(x => x.Vendor == vendor && x.Product == product &&
+                x.ContainerId != Guid.Empty).Select(x => x.ContainerId).Distinct().Take(2).ToArray();
+            return containers.Length == 1 ? containers[0] : Guid.Empty;
+        }
+        catch { return Guid.Empty; }
     }
 
     public static IReadOnlyList<Peripheral> Resolve(IEnumerable<Node> nodes)
@@ -121,14 +132,19 @@ public static class AtkDeviceDiscovery
                 if (!branded && !hasKnown) return null;
                 // A descriptive receiver/product string wins over generic USB or HID labels.
                 var best = items.OrderByDescending(n => NameScore(n.Name)).First();
-                var name = hasKnown ? MouseModels[known] :
+                var sharedReceiver = known is (0x373b, 0x1278) or (0x373b, 0x10c9);
+                var name = sharedReceiver ? AtkMouseHid.ReceiverName(known.Vendor, known.Product, best.Name) :
+                    hasKnown ? MouseModels[known] :
                     NameScore(best.Name) > 0 ? best.Name :
                     $"ATK/VXE/VGN {best.Vendor:X4}:{best.Product:X4}";
-                var icon = hasKnown ? "mouse" : items.Any(n => n.DeviceClass.Equals("Keyboard", StringComparison.OrdinalIgnoreCase) ||
-                    n.Name.Contains("keyboard", StringComparison.OrdinalIgnoreCase)) ? "keyboard" :
+                var icon = hasKnown || items.Any(n => n.DeviceClass.Equals("Mouse", StringComparison.OrdinalIgnoreCase) ||
+                    n.Name.Contains("A9 Mini", StringComparison.OrdinalIgnoreCase) ||
+                    n.Name.Contains("mouse", StringComparison.OrdinalIgnoreCase) && Brand.IsMatch(n.Name)) ? "mouse" :
                     items.Any(n => n.DeviceClass.Equals("Media", StringComparison.OrdinalIgnoreCase) ||
                     n.Name.Contains("headset", StringComparison.OrdinalIgnoreCase) ||
-                    n.Name.Contains("耳机", StringComparison.OrdinalIgnoreCase)) ? "headset" : "mouse";
+                    n.Name.Contains("耳机", StringComparison.OrdinalIgnoreCase)) ? "headset" :
+                    items.Any(n => n.DeviceClass.Equals("Keyboard", StringComparison.OrdinalIgnoreCase) ||
+                    n.Name.Contains("keyboard", StringComparison.OrdinalIgnoreCase)) ? "keyboard" : "mouse";
                 var key = best.ContainerId == Guid.Empty ? best.InstanceId : best.ContainerId.ToString("N");
                 var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key.ToUpperInvariant()));
                 return new Peripheral($"atk-{Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant()}",
@@ -144,6 +160,7 @@ public static class AtkDeviceDiscovery
             name.Contains("HID-compliant", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("USB Input Device", StringComparison.OrdinalIgnoreCase)) return 0;
         return (Brand.IsMatch(name) ? 4 : 1) + (name.Contains("receiver", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("dongle", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("接收器", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
     }
 }

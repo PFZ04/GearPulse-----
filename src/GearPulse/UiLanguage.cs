@@ -45,6 +45,8 @@ public static class UiLanguage
     public static string ContentOpacityLabel => Current switch { English => "Text and icon opacity", TraditionalChinese => "文字與圖示不透明度", _ => "文字与图标不透明度" };
     public static string MonitorLabel => Current switch { English => "Display", TraditionalChinese => "顯示器", _ => "显示器" };
     public static string CornerLabel => Current switch { English => "Corner", TraditionalChinese => "角落", _ => "角落" };
+    public static string ShowWiredHeadsets => Current switch { English => "Show wired headsets", TraditionalChinese => "顯示有線耳機", _ => "显示有线耳机" };
+    public static string ShowBluetoothHeadsets => Current switch { English => "Show Bluetooth headsets", TraditionalChinese => "顯示藍牙耳機", _ => "显示蓝牙耳机" };
     public static string LineIcons => Current switch { English => "Line", TraditionalChinese => "線條", _ => "线条" };
     public static string SilhouetteIcons => Current switch { English => "Silhouette", TraditionalChinese => "剪影", _ => "剪影" };
     public static string SmallSize => Current switch { English => "Small", TraditionalChinese => "小", _ => "小" };
@@ -108,6 +110,12 @@ public static class UiLanguage
 
     public static string StatusText(DeviceState state)
     {
+        if (state.Status == "empty") return Current switch
+        {
+            English => "No devices found",
+            TraditionalChinese => "未發現裝置",
+            _ => "未发现设备"
+        };
         if (state.Status == "mouse_offline") return Current switch
         {
             English => "Mouse disconnected or asleep",

@@ -53,6 +53,10 @@ public sealed class AppearanceWindow : Window
             [("top-left", UiLanguage.TopLeft), ("top-right", UiLanguage.TopRight),
              ("bottom-left", UiLanguage.BottomLeft), ("bottom-right", UiLanguage.BottomRight)],
             settings.Corner, value => settings = settings with { Corner = value }));
+        panel.Children.Add(Toggle(UiLanguage.ShowWiredHeadsets, settings.ShowWiredHeadsets,
+            value => settings = settings with { ShowWiredHeadsets = value }));
+        panel.Children.Add(Toggle(UiLanguage.ShowBluetoothHeadsets, settings.ShowBluetoothHeadsets,
+            value => settings = settings with { ShowBluetoothHeadsets = value }));
         Content = new ScrollViewer { Content = panel, Background = System.Windows.Media.Brushes.White,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         ready = true;
@@ -101,6 +105,17 @@ public sealed class AppearanceWindow : Window
         };
         stack.Children.Add(slider);
         return stack;
+    }
+
+    private FrameworkElement Toggle(string label, bool initial, Action<bool> update)
+    {
+        var box = new System.Windows.Controls.CheckBox
+        {
+            Content = label, IsChecked = initial, Margin = new Thickness(0, 0, 0, 14)
+        };
+        box.Checked += (_, _) => { if (ready) { update(true); Changed(); } };
+        box.Unchecked += (_, _) => { if (ready) { update(false); Changed(); } };
+        return box;
     }
 
     private void Changed()

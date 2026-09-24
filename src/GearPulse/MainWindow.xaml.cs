@@ -59,6 +59,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             (byte)Math.Round(settings.BackgroundOpacity * 2.55), 28, 32, 40));
         ContentScroller.Opacity = settings.ContentOpacity / 100.0;
         ApplyStates(visibleStates.ToArray());
+        if (IsLoaded) _ = RefreshAsync();
     }
 
     public void RefreshLanguage()
@@ -115,7 +116,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void ApplyStates(IEnumerable<DeviceState> states)
     {
         visibleStates.Clear();
-        foreach (var state in DeviceRoster.Visible(states)) visibleStates.Add(state);
+        foreach (var state in DeviceRoster.Visible(states, settings)) visibleStates.Add(state);
+        if (visibleStates.Count == 0)
+            visibleStates.Add(new DeviceState("empty", "GearPulse", "battery", null, null, true, "empty"));
         var source = (HwndSource?)PresentationSource.FromVisual(this);
         var scale = source?.CompositionTarget.TransformToDevice.M22 ?? 1;
         var screen = WidgetPlacement.SelectScreen(Screen.AllScreens, settings.Monitor);
