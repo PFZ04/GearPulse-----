@@ -13,6 +13,8 @@ Windows 桌面电量小组件，显示 Razer BlackShark V2 Pro、通过 USB 接�
 
 ## 构建与安装
 
+普通用户可直接运行 `publish\GearPulse-1.2.0-Setup.exe`，无需安装 .NET SDK。安装向导默认勾选登录时启动；可取消，之后仍可从托盘切换。安装包只为当前 Windows 用户安装，并在卸载时询问是否清除设置与日志。制作安装包的步骤见 [安装包说明](installer/README.md)。
+
 在 Windows x64 上安装 .NET 10 SDK，然后在仓库目录运行：
 
 ```powershell
