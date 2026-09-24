@@ -5,10 +5,11 @@ using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using System.Windows.Media;
 
 namespace GearPulse;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, INotifyPropertyChanged
 {
     private const int WsExToolWindow = 0x00000080;
     private const int WsExNoActivate = 0x08000000;
@@ -43,9 +44,22 @@ public partial class MainWindow : Window
     private bool userHidden;
     private bool exiting;
     private bool hostMissingLogged;
+    private WidgetSettings settings = new();
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<DeviceState> VisibleStates => visibleStates;
     public bool IsUserVisible => !userHidden;
+    public string IconStyle => settings.IconStyle;
+
+    public void ApplySettings(WidgetSettings value)
+    {
+        settings = value.Normalized();
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IconStyle)));
+        CardBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(
+            (byte)Math.Round(settings.BackgroundOpacity * 2.55), 28, 32, 40));
+        ContentScroller.Opacity = settings.ContentOpacity / 100.0;
+        ApplyStates(visibleStates.ToArray());
+    }
 
     public void RefreshLanguage()
     {
@@ -104,8 +118,12 @@ public partial class MainWindow : Window
         foreach (var state in DeviceRoster.Visible(states)) visibleStates.Add(state);
         var source = (HwndSource?)PresentationSource.FromVisual(this);
         var scale = source?.CompositionTarget.TransformToDevice.M22 ?? 1;
-        var maxHeight = (Screen.PrimaryScreen?.WorkingArea.Height ?? 900) / scale - 40;
-        Height = Math.Min(24 + 64 * Math.Max(1, visibleStates.Count), Math.Max(88, maxHeight));
+        var screen = WidgetPlacement.SelectScreen(Screen.AllScreens, settings.Monitor);
+        var maxHeight = (screen?.WorkingArea.Height ?? 900) / scale / settings.Scale - 40;
+        var baseHeight = Math.Min(24 + 64 * Math.Max(1, visibleStates.Count), Math.Max(88, maxHeight));
+        CardBorder.Height = baseHeight;
+        Width = 270 * settings.Scale;
+        Height = baseHeight * settings.Scale;
         if (IsLoaded) UpdateDesktopPosition();
     }
 
@@ -134,7 +152,7 @@ public partial class MainWindow : Window
                 Hide(); desktopHost = IntPtr.Zero; return;
             }
             hostMissingLogged = false;
-            var screen = Screen.PrimaryScreen;
+            var screen = WidgetPlacement.SelectScreen(Screen.AllScreens, settings.Monitor);
             if (screen is null) return;
             var source = (HwndSource?)PresentationSource.FromVisual(this);
             if (source is null) return;
@@ -143,8 +161,7 @@ public partial class MainWindow : Window
             var height = (int)Math.Round(Height * scale.M22);
             var margin = (int)Math.Round(20 * scale.M11);
             var area = screen.WorkingArea;
-            var placement = new System.Drawing.Rectangle(area.Right - width - margin,
-                area.Bottom - height - margin, width, height);
+            var placement = WidgetPlacement.Calculate(area, width, height, margin, settings.Corner);
             var hwnd = source.Handle;
             var predecessor = GetWindow(host, GwHwndPrev);
             var needZOrder = predecessor != hwnd;

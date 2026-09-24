@@ -36,30 +36,26 @@ public static class UiLanguage
         }
     }
 
-    public static bool Save(string path)
-    {
-        string? temporary = null;
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            temporary = path + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(new { language = Current }));
-            File.Move(temporary, path, true);
-            return true;
-        }
-        catch (Exception error)
-        {
-            AppLog.Write("Could not save language setting", error);
-            return false;
-        }
-        finally
-        {
-            if (temporary is not null)
-            {
-                try { File.Delete(temporary); } catch { /* The current session still uses the selected language. */ }
-            }
-        }
-    }
+    public static bool Save(string path) => SettingsJson.Update(path, root => root["language"] = Current);
+
+    public static string AppearanceMenu => Current switch { English => "Appearance settings", TraditionalChinese => "外觀設定", _ => "外观设置" };
+    public static string IconStyleLabel => Current switch { English => "Icon style", TraditionalChinese => "圖示樣式", _ => "图标样式" };
+    public static string SizeLabel => Current switch { English => "Widget size", TraditionalChinese => "小工具大小", _ => "小组件大小" };
+    public static string BackgroundOpacityLabel => Current switch { English => "Background opacity", TraditionalChinese => "背景不透明度", _ => "背景不透明度" };
+    public static string ContentOpacityLabel => Current switch { English => "Text and icon opacity", TraditionalChinese => "文字與圖示不透明度", _ => "文字与图标不透明度" };
+    public static string MonitorLabel => Current switch { English => "Display", TraditionalChinese => "顯示器", _ => "显示器" };
+    public static string CornerLabel => Current switch { English => "Corner", TraditionalChinese => "角落", _ => "角落" };
+    public static string LineIcons => Current switch { English => "Line", TraditionalChinese => "線條", _ => "线条" };
+    public static string SilhouetteIcons => Current switch { English => "Silhouette", TraditionalChinese => "剪影", _ => "剪影" };
+    public static string SmallSize => Current switch { English => "Small", TraditionalChinese => "小", _ => "小" };
+    public static string MediumSize => Current switch { English => "Medium", TraditionalChinese => "中", _ => "中" };
+    public static string LargeSize => Current switch { English => "Large", TraditionalChinese => "大", _ => "大" };
+    public static string PrimaryDisplay => Current switch { English => "Primary display", TraditionalChinese => "主顯示器", _ => "主显示器" };
+    public static string DisconnectedDisplay => Current switch { English => "disconnected", TraditionalChinese => "已斷開", _ => "已断开" };
+    public static string TopLeft => Current switch { English => "Top left", TraditionalChinese => "左上", _ => "左上" };
+    public static string TopRight => Current switch { English => "Top right", TraditionalChinese => "右上", _ => "右上" };
+    public static string BottomLeft => Current switch { English => "Bottom left", TraditionalChinese => "左下", _ => "左下" };
+    public static string BottomRight => Current switch { English => "Bottom right", TraditionalChinese => "右下", _ => "右下" };
 
     public static string WindowTitle => Current switch
     {

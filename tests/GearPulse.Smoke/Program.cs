@@ -92,20 +92,38 @@ try
 {
     UiLanguage.Load(settingsPath);
     Check(UiLanguage.Current == UiLanguage.SimplifiedChinese, "missing language defaults to simplified Chinese");
+    Check(WidgetSettings.Load(settingsPath) == new WidgetSettings(), "missing appearance defaults");
     UiLanguage.Select(UiLanguage.TraditionalChinese);
     Check(UiLanguage.Save(settingsPath), "language saves");
+    var appearance = new WidgetSettings("silhouette", "large", 37, 68, "DISPLAY2", "top-left");
+    Check(appearance.Save(settingsPath), "appearance saves");
     UiLanguage.Select(UiLanguage.English);
     UiLanguage.Load(settingsPath);
     Check(UiLanguage.Current == UiLanguage.TraditionalChinese, "language survives restart");
+    Check(WidgetSettings.Load(settingsPath) == appearance, "appearance survives restart");
+    UiLanguage.Select(UiLanguage.English);
+    Check(UiLanguage.Save(settingsPath), "language changes after appearance");
+    Check(WidgetSettings.Load(settingsPath) == appearance, "language save preserves appearance");
+    File.WriteAllText(settingsPath, "{\"language\":\"en\",\"appearance\":{\"iconStyle\":\"bad\",\"size\":\"huge\",\"backgroundOpacity\":101,\"contentOpacity\":-4,\"corner\":\"bad\"}}");
+    Check(WidgetSettings.Load(settingsPath) == new WidgetSettings("line", "medium", 100, 0), "invalid appearance normalized");
+    File.WriteAllText(settingsPath, "{\"appearance\":{\"size\":\"small\",\"backgroundOpacity\":\"invalid\"}}");
+    Check(WidgetSettings.Load(settingsPath) == new WidgetSettings(Size: "small"), "invalid setting does not discard valid settings");
     File.WriteAllText(settingsPath, "{\"language\":\"invalid\"}");
     UiLanguage.Load(settingsPath);
     Check(UiLanguage.Current == UiLanguage.SimplifiedChinese, "invalid language defaults");
+    Check(WidgetSettings.Load(settingsPath) == new WidgetSettings(), "legacy language-only settings load");
 }
 finally
 {
     Directory.Delete(Path.GetDirectoryName(settingsPath)!, true);
     UiLanguage.Select(UiLanguage.SimplifiedChinese);
 }
+var area = new System.Drawing.Rectangle(100, 200, 800, 600);
+Check(WidgetPlacement.Calculate(area, 270, 88, 20, "top-left").Location == new System.Drawing.Point(120, 220), "top-left placement");
+Check(WidgetPlacement.Calculate(area, 270, 88, 20, "top-right").Location == new System.Drawing.Point(610, 220), "top-right placement");
+Check(WidgetPlacement.Calculate(area, 270, 88, 20, "bottom-left").Location == new System.Drawing.Point(120, 692), "bottom-left placement");
+Check(WidgetPlacement.Calculate(area, 270, 88, 20, "bottom-right").Location == new System.Drawing.Point(610, 692), "bottom-right placement");
+Check(new WidgetSettings(Size: "small").Scale == .8 && new WidgetSettings(Size: "large").Scale == 1.25, "size presets");
 Check(new DeviceState("x", "X", "mouse", 20, false, true, "ok").IsLow, "20% low threshold");
 Check(!new DeviceState("x", "X", "mouse", 21, false, true, "ok").IsLow, "21% normal threshold");
 Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "atk-peripherals", "logitech-lightspeed"]), "device order");

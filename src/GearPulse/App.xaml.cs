@@ -19,7 +19,9 @@ public partial class App : Application
     private NotifyIcon? tray;
     private System.Drawing.Icon? icon;
     private MainWindow? window;
-    private static readonly string LanguagePath = Path.Combine(AppLog.DataDirectory, "settings.json");
+    private AppearanceWindow? appearanceWindow;
+    private WidgetSettings settings = new();
+    private static readonly string SettingsPath = Path.Combine(AppLog.DataDirectory, "settings.json");
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -49,7 +51,8 @@ public partial class App : Application
 
         try
         {
-            UiLanguage.Load(LanguagePath);
+            UiLanguage.Load(SettingsPath);
+            settings = WidgetSettings.Load(SettingsPath);
             exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName);
             showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
             exitRegistration = ThreadPool.RegisterWaitForSingleObject(exitEvent,
@@ -57,6 +60,7 @@ public partial class App : Application
             showRegistration = ThreadPool.RegisterWaitForSingleObject(showEvent,
                 (_, _) => Dispatcher.BeginInvoke(() => commands?.SetVisible(true)), null, Timeout.Infinite, false);
             window = new MainWindow();
+            window.ApplySettings(settings);
             commands = new TrayCommands(new WindowsStartupTask(), window.SetUserVisible, QuitApplication);
             BuildTray();
             window.Show();
@@ -89,6 +93,8 @@ public partial class App : Application
         };
         var quit = new ToolStripMenuItem();
         quit.Click += (_, _) => commands!.Exit();
+        var appearance = new ToolStripMenuItem();
+        appearance.Click += (_, _) => OpenAppearance();
         var language = new ToolStripMenuItem();
         foreach (var (code, name) in new[]
         {
@@ -101,8 +107,9 @@ public partial class App : Application
             item.Click += (_, _) =>
             {
                 UiLanguage.Select(code);
-                UiLanguage.Save(LanguagePath);
+                UiLanguage.Save(SettingsPath);
                 window!.RefreshLanguage();
+                appearanceWindow?.RefreshLanguage();
                 UpdateTexts();
             };
             language.DropDownItems.Add(item);
@@ -115,6 +122,7 @@ public partial class App : Application
             startup.Checked = state == true;
             startup.Text = state.HasValue ? UiLanguage.StartWithWindows : UiLanguage.InstallFirst;
             language.Text = UiLanguage.LanguageMenu;
+            appearance.Text = UiLanguage.AppearanceMenu;
             foreach (ToolStripMenuItem item in language.DropDownItems)
                 item.Checked = (string)item.Tag! == UiLanguage.Current;
             quit.Text = UiLanguage.Exit;
@@ -125,10 +133,28 @@ public partial class App : Application
             visible.Checked = commands!.IsVisible;
             UpdateTexts();
         };
-        menu.Items.AddRange([visible, startup, language, new ToolStripSeparator(), quit]);
+        menu.Items.AddRange([visible, startup, language, appearance, new ToolStripSeparator(), quit]);
         tray = new NotifyIcon { Icon = icon, ContextMenuStrip = menu, Visible = true };
         UpdateTexts();
         tray.DoubleClick += (_, _) => { commands!.SetVisible(true); };
+    }
+
+    private void OpenAppearance()
+    {
+        if (appearanceWindow is not null)
+        {
+            appearanceWindow.Activate();
+            return;
+        }
+        appearanceWindow = new AppearanceWindow(settings, value =>
+        {
+            settings = value;
+            window?.ApplySettings(settings);
+            settings.Save(SettingsPath);
+        });
+        appearanceWindow.Closed += (_, _) => appearanceWindow = null;
+        appearanceWindow.Show();
+        appearanceWindow.Activate();
     }
 
     private void QuitApplication()
