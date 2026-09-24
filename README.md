@@ -10,7 +10,7 @@ GearPulse 是一个面向 Windows 的桌面外设电量小组件。它把已连�
 
 ## 当前版本
 
-当前登录任务运行 **V1.3.7**：程序位于 `publish\win-x64\GearPulse.exe`，自包含候选版位于 `publish\gamesir-candidate\GearPulse.exe`，安装包位于 `publish\GearPulse-1.3.7-Setup.exe`。替换前的 V1.3.6 备份为 `publish\GearPulse-1.3.6-before-gamesir.exe`。V1.3.7 已在本机运行并验证；安装包已编译，未在本机运行。Viper V4 Pro 的型号和电量已由用户实机验证，充电状态不可读；其他雷蛇型号的通用电量读取尚未实机验证。
+本机正在运行 **V1.3.8**；自包含候选版位于 `publish\valkyrie-final\GearPulse.exe`，安装包位于 `publish\GearPulse-1.3.8-Setup.exe`。本机安装目录为 `%LOCALAPPDATA%\Programs\GearPulse`。VK MAG 75 MAX 的 2.4G 电量和蓝牙电量已在本机实测；USB 有线模式目前没有可信百分比。Viper V4 Pro 的型号和电量已由用户实机验证，充电状态不可读；其他雷蛇型号的通用电量读取尚未实机验证。
 
 ## 设备支持
 
@@ -24,6 +24,7 @@ GearPulse 是一个面向 Windows 的桌面外设电量小组件。它把已连�
 | ATK／VXE／VGN 鼠标、键盘、耳机 | USB 设备容器、厂商信息或已收录的产品 ID | 自动发现并去重；产品 ID 只用于发现设备，不直接决定鼠标型号。有已验证电量协议时读取百分比，否则显示“电量暂不可用”。 |
 | ATK F1 V3 Ultimate+、A9 Plus NK | 接收器 `373B:1278`、`373B:10C9` 与鼠标身份应答 | 保留已实测的在线、型号和电量查询；无线型号需要有效身份应答，休眠或查询失败时清除旧型号和电量。 |
 | ATK A9 Mini+ | 有线 USB 产品名称；接收器模式显示 `ATK 8K Dongle` | 用户实测：有线模式正常识别鼠标型号、显示电量和充电状态；接收器模式正常显示电量和充电状态，但界面显示接收器名称，尚未识别为 A9 Mini+。 |
+| VK MAG 75 MAX | 2.4G `374A:A223`、USB `374A:A222`、蓝牙 `VK MAG75 Max` | 三种模式合并为一条键盘记录。2.4G 接收器只在在线时使用专用状态查询的真实百分比；蓝牙仅在活动 HID 键盘接口存在时使用 Windows 电量值，避免显示断开后的缓存值。USB 有线模式识别设备，但电量未知；三种模式的充电状态均未确认。 |
 | 罗技 LIGHTSPEED 鼠标／键盘 | HID++ 接收器与配对设备身份 | 动态读取设备名称、类型和电量功能；休眠时清除旧百分比。 |
 | Xbox 蓝牙手柄 | Windows 蓝牙游戏输入设备 | 使用 Windows 当前提供的电量百分比；仅已配对但没有活动游戏输入接口时不显示，避免沿用旧值。 |
 | GameSir Nova Lite 2（启明星 2）2.4G | `3537:1098` 接收器的 `FF7A:0001` 专用 HID 接口 | 独立发送已验证的只读设备信息查询，显示真实百分比；按物理设备容器去重。读取失败、关机或断开时清除旧读数。 |
@@ -50,13 +51,13 @@ GearPulse 是一个面向 Windows 的桌面外设电量小组件。它把已连�
 
 ## 构建与安装
 
-普通用户可直接运行 `publish\GearPulse-1.3.7-Setup.exe` 安装 V1.3.7，无需安装 .NET SDK。安装向导默认勾选登录时启动；可取消，之后仍可从托盘切换。安装包只为当前 Windows 用户安装，并在卸载时询问是否清除设置与日志。本机已将登录任务直接更新至 V1.3.7，未运行安装包。制作安装包的步骤见 [安装包说明](installer/README.md)。
+普通用户可直接运行 `publish\GearPulse-1.3.8-Setup.exe` 安装 V1.3.8，无需安装 .NET SDK。安装向导默认勾选登录时启动；可取消，之后仍可从托盘切换。安装包只为当前 Windows 用户安装，并在卸载时询问是否清除设置与日志。制作安装包的步骤见 [安装包说明](installer/README.md)。
 
-需要从源码重新生成 V1.3.7 程序和安装包时，在 Windows x64 上安装 .NET 10 SDK 和 Inno Setup 7，然后在仓库目录运行：
+需要从源码重新生成 V1.3.8 程序和安装包时，在 Windows x64 上安装 .NET 10 SDK 和 Inno Setup 7，然后在仓库目录运行：
 
 ```powershell
-pwsh -NoProfile -File .\Publish-GearPulse.ps1 -OutputPath .\publish\gamesir-candidate
-pwsh -NoProfile -File .\Build-Installer.ps1 -SourceExe .\publish\gamesir-candidate\GearPulse.exe -ExpectedVersion 1.3.7
+pwsh -NoProfile -File .\Publish-GearPulse.ps1 -OutputPath .\publish\valkyrie-final
+pwsh -NoProfile -File .\Build-Installer.ps1 -SourceExe .\publish\valkyrie-final\GearPulse.exe -ExpectedVersion 1.3.8
 ```
 
 “外观设置”中的“隐藏无法读取的信息”默认关闭。开启后，设备名称和图标仍显示；电量可读但充电状态未知时只显示电量，电量也不可读时收起状态文字。该设置会保存并即时生效。详细操作见 [WIDGET-README.md](WIDGET-README.md)。
@@ -68,7 +69,7 @@ dotnet run --project .\tests\GearPulse.Smoke\GearPulse.Smoke.csproj -c Release
 pwsh -NoProfile -File .\Test-BlackSharkProtocol.ps1
 ```
 
-离线测试不发送 HID 命令。V1.3.7 已通过 194 项离线检查，覆盖手柄发现去重、无效电量与启明星 2 设备信息解析。运行 `dotnet run --project .\tests\GearPulse.Smoke\GearPulse.Smoke.csproj -c Release -- --gamepad-diagnostics` 可查看当前物理手柄行、电量来源和 XInput 插槽；对已验证的启明星 2 2.4G 接口会发送只读设备信息查询。`--atk-diagnostics` 查看 ATK 接收器 ID、接口规格、身份码、查询状态和电量；只查询已验证的 17 字节接口。`--razer-integration` 查看本机雷蛇设备信息和电量。诊断均不输出设备路径或序列号。状态不明时不沿用旧电量，也不把未知电量当作 0%。
+离线测试不发送 HID 命令。V1.3.8 已通过 204 项离线检查，覆盖手柄发现去重、无效电量、启明星 2 设备信息，以及 Mag75 MAX 接口筛选和离线电量清除。运行 `dotnet run --project .\tests\GearPulse.Smoke\GearPulse.Smoke.csproj -c Release -- --gamepad-diagnostics` 可查看当前物理手柄行、电量来源和 XInput 插槽；对已验证的启明星 2 2.4G 接口会发送只读设备信息查询。`--atk-diagnostics` 查看 ATK 接收器 ID、接口规格、身份码、查询状态和电量；只查询已验证的 17 字节接口。`--razer-integration` 查看本机雷蛇设备信息和电量。`--valkyrie-diagnostics` 查看 Mag75 MAX 的接口规格、Windows 蓝牙电量及接收器只读状态。诊断均不输出设备路径或序列号。状态不明时不沿用旧电量，也不把未知电量当作 0%。
 
 ATK 系列发现范围是能够从 Windows USB 设备信息确认品牌的 ATK／VXE／VGN 设备，以及已收录产品 ID 的鼠标；蓝牙不在范围内。共用 Compx 芯片的其他品牌不会仅凭厂商 ID 被误认。可识别的接收器显示中性名称，不采用接收器 ID 或带型号的接收器描述来判断配对鼠标；无法从描述区分接收器与有线鼠标的设备仍需实机核对。17 字节鼠标协议匹配时才查询电量；其他协议的型号（包括 ATK Zero）目前显示未知电量。A9 Mini+ 接收器模式已由用户确认能显示电量和充电状态，但仍显示 `ATK 8K Dongle`；无线身份需取得有效应答后才能标为 A9 Mini+，不能借用 F1 的身份映射推测。已收录的鼠标 ID 参考 [Mouse Tray 的协议与型号表](https://github.com/Fan4Metal/mouse_tray/tree/master/mouse_tray/drivers/chipset)。
 

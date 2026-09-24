@@ -1,6 +1,37 @@
 using System.Text.Json;
 using GearPulse;
 
+if (args.Contains("--valkyrie-diagnostics", StringComparer.OrdinalIgnoreCase))
+{
+    var nodes = AtkDeviceDiscovery.EnumerateNodes(false);
+    var bluetoothContainers = nodes.Where(n => n.Name.Contains("MAG75", StringComparison.OrdinalIgnoreCase) ||
+        n.Name.Contains("MAG 75", StringComparison.OrdinalIgnoreCase))
+        .Select(n => n.ContainerId).Where(id => id != Guid.Empty).ToHashSet();
+    foreach (var device in AtkMouseHid.EnumerateVendor(0x374a))
+    {
+        Console.WriteLine($"HID {device.Vendor:X4}:{device.Product:X4} {device.ProductName}: " +
+            $"usage={device.UsagePage:X4}:{device.Usage:X4}, reports=" +
+            $"{device.InputLength}/{device.OutputLength}/{device.FeatureLength}, " +
+            $"container={device.ContainerId}");
+        if (ValkyrieHid.IsReceiverStatusInterface(device))
+        {
+            var status = ValkyrieHid.ProbeStatus(device);
+            Console.WriteLine("Receiver status: " + (status is null ? "unavailable" :
+                Convert.ToHexString(status.AsSpan(0, 16))));
+        }
+    }
+    foreach (var node in nodes.Where(n => n.Vendor == 0x374a || bluetoothContainers.Contains(n.ContainerId) ||
+        n.Name.Contains("MAG75", StringComparison.OrdinalIgnoreCase) ||
+        n.Name.Contains("MAG 75", StringComparison.OrdinalIgnoreCase) ||
+        n.Name.Contains("Valkyrie", StringComparison.OrdinalIgnoreCase)))
+        Console.WriteLine($"Node {node.Name}: class={node.DeviceClass}, " +
+            $"vid:pid={node.Vendor:X4}:{node.Product:X4}, battery={node.Battery?.ToString() ?? "unknown"}, " +
+            $"connected={node.Connected?.ToString() ?? "unknown"}, " +
+            $"transport={(node.InstanceId.StartsWith("BTH", StringComparison.OrdinalIgnoreCase) ? "BTH" : node.InstanceId.StartsWith("HID\\", StringComparison.OrdinalIgnoreCase) ? "HID" : "USB")}, " +
+            $"container={node.ContainerId}");
+    return;
+}
+
 if (args.Contains("--gamepad-diagnostics", StringComparer.OrdinalIgnoreCase))
 {
     var nodes = AtkDeviceDiscovery.EnumerateNodes(false);
@@ -102,7 +133,7 @@ if (args.Contains("--devices-integration", StringComparer.OrdinalIgnoreCase))
     foreach (var provider in DeviceRoster.Providers)
     {
         foreach (var state in provider.Read())
-            Console.WriteLine($"{state.Id}: status={state.Status}, battery={state.Battery?.ToString() ?? "unknown"}, charging={state.Charging?.ToString() ?? "unknown"}");
+            Console.WriteLine($"{state.Id}: name={state.Name}, connection={state.Connection}, status={state.Status}, battery={state.Battery?.ToString() ?? "unknown"}, charging={state.Charging?.ToString() ?? "unknown"}");
     }
     return;
 }
@@ -230,7 +261,38 @@ Check(WidgetPlacement.Calculate(area, 270, 88, 20, "bottom-right").Location == n
 Check(new WidgetSettings(Size: "small").Scale == .8 && new WidgetSettings(Size: "large").Scale == 1.25, "size presets");
 Check(new DeviceState("x", "X", "mouse", 20, false, true, "ok").IsLow, "20% low threshold");
 Check(!new DeviceState("x", "X", "mouse", 21, false, true, "ok").IsLow, "21% normal threshold");
-Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "razer-peripherals", "atk-peripherals", "logitech-lightspeed", "logitech-g522-lightspeed", "windows-gamepads", "windows-audio-headsets"]), "device order");
+Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "razer-peripherals", "atk-peripherals", "valkyrie-mag75-max", "logitech-lightspeed", "logitech-g522-lightspeed", "windows-gamepads", "windows-audio-headsets"]), "device order");
+var magReceiver = new AtkMouseHid.Device { Vendor = 0x374a, Product = 0xa223,
+    ProductName = "VKMAG75Max", UsagePage = 0xffff, Usage = 2, FeatureLength = 65 };
+Check(ValkyrieHid.IsReceiverStatusInterface(magReceiver), "Mag75 Max receiver interface");
+Check(!ValkyrieHid.IsReceiverStatusInterface(new AtkMouseHid.Device { Vendor = 0x374a,
+    Product = 0xa223, ProductName = "Other keyboard", UsagePage = 0xffff, Usage = 2,
+    FeatureLength = 65 }), "Mag75 Max receiver identity required");
+var magOnline = new byte[65];
+magOnline[2] = 87; magOnline[4] = 0; magOnline[6] = 1; magOnline[7] = 1;
+Check(ValkyrieHid.ParseStatus(magOnline) is { Online: true, Battery: 87 }, "Mag75 Max receiver percentage");
+magOnline[4] = 1;
+Check(ValkyrieHid.ParseStatus(magOnline) is { Online: false, Battery: null }, "Mag75 Max offline clears stale battery");
+magOnline[4] = 0; magOnline[2] = 255;
+Check(ValkyrieHid.ParseStatus(magOnline) is { Online: true, Battery: null }, "Mag75 Max invalid battery unknown");
+magOnline[2] = 0;
+Check(ValkyrieHid.ParseStatus(magOnline) is { Online: true, Battery: null }, "Mag75 Max transitional zero unknown");
+magOnline[7] = 0;
+Check(ValkyrieHid.ParseStatus(magOnline) is null, "Mag75 Max malformed receiver status rejected");
+Check(ValkyrieKeyboardDiscovery.IsWiredInterface(new AtkMouseHid.Device { Vendor = 0x374a,
+    Product = 0xa222, ProductName = "VK MAG75 Max", UsagePage = 0xffff,
+    Usage = 2, FeatureLength = 65 }), "Mag75 Max wired interface");
+var magBluetoothContainer = Guid.NewGuid();
+Check(ValkyrieKeyboardDiscovery.ConnectedBluetoothNodes([
+    new AtkDeviceDiscovery.Node(magBluetoothContainer, "BTHLE\\Dev_MAG75", 0, 0,
+        "VK MAG75 Max", "", "Bluetooth", 64),
+    new AtkDeviceDiscovery.Node(magBluetoothContainer, "HID\\MAG75", 0, 0,
+        "HID Keyboard Device", "", "Keyboard")
+]).Count == 2, "Mag75 Max active Bluetooth keyboard grouped");
+Check(ValkyrieKeyboardDiscovery.ConnectedBluetoothNodes([
+    new AtkDeviceDiscovery.Node(Guid.NewGuid(), "BTHLE\\Dev_MAG75", 0, 0,
+        "VK MAG75 Max", "", "Bluetooth", 64, false)
+]).Count == 0, "Mag75 Max disconnected Bluetooth ignored");
 Check(GamepadBatteryProvider.DecodeXInput(2, 0) == BatteryLevel.Empty &&
     GamepadBatteryProvider.DecodeXInput(3, 3) == BatteryLevel.Full &&
     GamepadBatteryProvider.DecodeXInput(1, 3) is null &&

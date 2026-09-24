@@ -119,6 +119,7 @@ public static class DeviceRoster
         new BlackSharkBatteryProvider(),
         new RazerBatteryProvider(),
         new AtkBatteryProvider(),
+        new ValkyrieBatteryProvider(),
         new LogitechBatteryProvider(),
         new G522BatteryProvider(),
         new GamepadBatteryProvider(),

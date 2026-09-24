@@ -53,7 +53,7 @@ public static class AtkMouseHid
     public static Device[] EnumerateAll() => EnumerateCore(false, 0x373b, 0x3554);
 
     // Shared read-only HID enumeration for Razer's standard feature-report interface.
-    public static Device[] EnumerateVendor(int vendor) => vendor is 0x1532 or 0x3537
+    public static Device[] EnumerateVendor(int vendor) => vendor is 0x1532 or 0x3537 or 0x374a
         ? EnumerateCore(false, vendor) : throw new ArgumentOutOfRangeException(nameof(vendor));
 
     public static bool IsBatteryInterface(Device device) => device != null &&
