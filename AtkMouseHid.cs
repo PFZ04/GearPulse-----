@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -46,16 +47,20 @@ public static class AtkMouseHid
     public sealed class Device { public string Path { get; set; } public int InputLength { get; set; } public int OutputLength { get; set; } public int FeatureLength { get; set; } public int UsagePage { get; set; } public int Usage { get; set; } public int Vendor { get; set; } public int Product { get; set; } public Guid ContainerId { get; set; } public string ProductName { get; set; } public string ManufacturerName { get; set; } }
     public sealed class Result { public string Status { get; set; } = "unavailable"; public bool ReceiverPresent { get; set; } public bool? Online { get; set; } public int? Battery { get; set; } public bool? Charging { get; set; } public int? Cid { get; set; } public int? Mid { get; set; } public string Name { get; set; } public string Error { get; set; } public Device Device { get; set; } }
 
-    public static Device[] Enumerate() => EnumerateCore(true);
+    public static Device[] Enumerate() => EnumerateCore(true, 0x373b, 0x3554);
 
     // Diagnostics can inspect other ATK collections without sending a report to them.
-    public static Device[] EnumerateAll() => EnumerateCore(false);
+    public static Device[] EnumerateAll() => EnumerateCore(false, 0x373b, 0x3554);
+
+    // Shared read-only HID enumeration for Razer's standard feature-report interface.
+    public static Device[] EnumerateVendor(int vendor) => vendor == 0x1532
+        ? EnumerateCore(false, vendor) : throw new ArgumentOutOfRangeException(nameof(vendor));
 
     public static bool IsBatteryInterface(Device device) => device != null &&
         device.UsagePage==0xff02 && device.Usage==2 &&
         device.InputLength==17 && device.OutputLength==17;
 
-    static Device[] EnumerateCore(bool batteryOnly)
+    static Device[] EnumerateCore(bool batteryOnly, params int[] vendors)
     {
         HidD_GetHidGuid(out Guid guid);
         IntPtr set = SetupDiGetClassDevsW(ref guid, null, IntPtr.Zero, 0x12);
@@ -76,11 +81,11 @@ public static class AtkMouseHid
                     var info = new DeviceInfoData { Size=Marshal.SizeOf<DeviceInfoData>() };
                     if (!SetupDiGetDeviceInterfaceDetailW(set, ref data, detail, needed, out needed, ref info)) throw new Win32Exception();
                     string path = Marshal.PtrToStringUni(IntPtr.Add(detail, 4));
-                    if (path==null || !(path.Contains("vid_373b&pid_",StringComparison.OrdinalIgnoreCase) || path.Contains("vid_3554&pid_",StringComparison.OrdinalIgnoreCase))) continue;
+                    if (path==null || !vendors.Any(v => path.Contains($"vid_{v:x4}&pid_",StringComparison.OrdinalIgnoreCase))) continue;
                     using (var h = CreateFileW(path, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero)) {
                         if (h.IsInvalid) continue;
                         var a = new Attributes { Size=Marshal.SizeOf<Attributes>() };
-                        if (!HidD_GetAttributes(h, ref a) || (a.Vendor!=0x373b && a.Vendor!=0x3554)) continue;
+                        if (!HidD_GetAttributes(h, ref a) || !vendors.Contains(a.Vendor)) continue;
                         if (!HidD_GetPreparsedData(h, out IntPtr p)) continue;
                         try {
                             if (HidP_GetCaps(p, out Caps c)!=0x110000) continue;

@@ -12,7 +12,8 @@ public sealed record WidgetSettings(
     string? Monitor = null,
     string Corner = "bottom-right",
     bool ShowWiredHeadsets = true,
-    bool ShowBluetoothHeadsets = true)
+    bool ShowBluetoothHeadsets = true,
+    bool HideUnreadableInformation = false)
 {
     public double Scale => Size switch { "small" => .8, "large" => 1.25, _ => 1 };
 
@@ -39,10 +40,13 @@ public sealed record WidgetSettings(
                 field.ValueKind == JsonValueKind.Number && field.TryGetInt32(out var result) ? result : fallback;
             static bool Boolean(JsonElement item, string name) => !item.TryGetProperty(name, out var field) ||
                 field.ValueKind != JsonValueKind.False;
+            static bool Enabled(JsonElement item, string name) => item.TryGetProperty(name, out var field) &&
+                field.ValueKind == JsonValueKind.True;
             return new WidgetSettings(String(value, "iconStyle") ?? "line", String(value, "size") ?? "medium",
                 Number(value, "backgroundOpacity", 92), Number(value, "contentOpacity", 100),
                 String(value, "monitor"), String(value, "corner") ?? "bottom-right",
-                Boolean(value, "showWiredHeadsets"), Boolean(value, "showBluetoothHeadsets")).Normalized();
+                Boolean(value, "showWiredHeadsets"), Boolean(value, "showBluetoothHeadsets"),
+                Enabled(value, "hideUnreadableInformation")).Normalized();
         }
         catch (Exception error)
         {
@@ -63,7 +67,8 @@ public sealed record WidgetSettings(
             ["monitor"] = value.Monitor,
             ["corner"] = value.Corner,
             ["showWiredHeadsets"] = value.ShowWiredHeadsets,
-            ["showBluetoothHeadsets"] = value.ShowBluetoothHeadsets
+            ["showBluetoothHeadsets"] = value.ShowBluetoothHeadsets,
+            ["hideUnreadableInformation"] = value.HideUnreadableInformation
         };
     });
 }

@@ -11,9 +11,10 @@ public sealed record DeviceState(
     string Connection = "",
     Guid ContainerId = default)
 {
+    public bool HideUnreadableInformation { get; init; }
     public bool IsVisible => Status != "hidden";
     public bool IsLow => Battery is >= 0 and <= 20;
-    public string StatusText => UiLanguage.StatusText(this);
+    public string StatusText => UiLanguage.StatusText(this, HideUnreadableInformation);
 }
 
 public interface IBatteryProvider
@@ -113,6 +114,7 @@ public static class DeviceRoster
     public static readonly IReadOnlyList<IBatteryProvider> Providers =
     [
         new BlackSharkBatteryProvider(),
+        new RazerBatteryProvider(),
         new AtkBatteryProvider(),
         new LogitechBatteryProvider(),
         new G522BatteryProvider(),
@@ -131,13 +133,48 @@ public static class DeviceRoster
                 "wired" => settings.ShowWiredHeadsets,
                 "bluetooth" => settings.ShowBluetoothHeadsets,
                 _ => true
-            })).ToArray();
+            })).Select(s => s with { HideUnreadableInformation = settings.HideUnreadableInformation })
+            .ToArray();
 }
 
 public sealed class G522BatteryProvider : IBatteryProvider
 {
     public string Id => "logitech-g522-lightspeed";
     public IReadOnlyList<DeviceState> Read() => G522Hid.Sample();
+}
+
+public sealed class RazerBatteryProvider : IBatteryProvider
+{
+    public string Id => "razer-peripherals";
+
+    public IReadOnlyList<DeviceState> Read()
+    {
+        try
+        {
+            var peripherals = RazerDeviceDiscovery.Resolve(AtkDeviceDiscovery.EnumerateNodes(false));
+            AtkMouseHid.Device[] interfaces = [];
+            if (peripherals.Any(p => p.Connection != "bluetooth" && RazerHid.ForProduct(p.Product) is not null))
+            {
+                try { interfaces = AtkMouseHid.EnumerateVendor(0x1532); }
+                catch (Exception error) { AppLog.Write("Razer HID discovery failed", error); }
+            }
+            return peripherals.Select(peripheral =>
+            {
+                var sample = peripheral.Connection == "bluetooth"
+                    ? new RazerHid.Result(peripheral.Battery, null)
+                    : RazerHid.Sample(peripheral, interfaces);
+                return new DeviceState(peripheral.Id, peripheral.Name, peripheral.Icon,
+                    sample.Battery, sample.Charging, true,
+                    sample.Battery.HasValue ? "ok" : "unavailable", peripheral.Connection,
+                    peripheral.ContainerId);
+            }).ToArray();
+        }
+        catch (Exception error)
+        {
+            AppLog.Write("Razer device discovery failed", error);
+            return [];
+        }
+    }
 }
 
 public sealed class AudioHeadsetProvider : IBatteryProvider

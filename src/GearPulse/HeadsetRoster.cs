@@ -18,6 +18,20 @@ public static class HeadsetRoster
             var model = ModelKey(x.Name);
             if (model.Length > 0)
             {
+                if (model == "blackshark-v2-pro")
+                {
+                    var verified = headsets.Where(y => y.Id == "blackshark-v2-pro").ToArray();
+                    var discovered = headsets.Where(y => y.Id.StartsWith("razer-", StringComparison.Ordinal) &&
+                        ModelKey(y.Name) == model).ToArray();
+                    if (verified.Length == 1 && discovered.Length == 1 &&
+                        (verified[0].ContainerId == Guid.Empty || discovered[0].ContainerId == Guid.Empty ||
+                         verified[0].ContainerId == discovered[0].ContainerId) &&
+                        (x.Id == verified[0].Id || x.Id == discovered[0].Id ||
+                         x.ContainerId == Guid.Empty || x.ContainerId == verified[0].ContainerId ||
+                         x.ContainerId == discovered[0].ContainerId))
+                        return verified[0].ContainerId != Guid.Empty
+                            ? "container-" + verified[0].ContainerId.ToString("N") : "model-" + model;
+                }
                 var known = headsets.Where(y => !y.Id.StartsWith("audio-", StringComparison.Ordinal) &&
                     ModelKey(y.Name) == model).Take(2).ToArray();
                 if (known.Length == 1 && (x.ContainerId == Guid.Empty || known[0].ContainerId == Guid.Empty ||

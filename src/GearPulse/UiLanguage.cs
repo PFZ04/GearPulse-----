@@ -47,6 +47,7 @@ public static class UiLanguage
     public static string CornerLabel => Current switch { English => "Corner", TraditionalChinese => "角落", _ => "角落" };
     public static string ShowWiredHeadsets => Current switch { English => "Show wired headsets", TraditionalChinese => "顯示有線耳機", _ => "显示有线耳机" };
     public static string ShowBluetoothHeadsets => Current switch { English => "Show Bluetooth headsets", TraditionalChinese => "顯示藍牙耳機", _ => "显示蓝牙耳机" };
+    public static string HideUnreadableInformation => Current switch { English => "Hide unavailable information", TraditionalChinese => "隱藏無法讀取的資訊", _ => "隐藏无法读取的信息" };
     public static string LineIcons => Current switch { English => "Line", TraditionalChinese => "線條", _ => "线条" };
     public static string SilhouetteIcons => Current switch { English => "Silhouette", TraditionalChinese => "剪影", _ => "剪影" };
     public static string SmallSize => Current switch { English => "Small", TraditionalChinese => "小", _ => "小" };
@@ -108,7 +109,7 @@ public static class UiLanguage
         _ => "无法修改开机启动任务。请重新运行安装脚本。"
     };
 
-    public static string StatusText(DeviceState state)
+    public static string StatusText(DeviceState state, bool hideUnreadableInformation = false)
     {
         if (state.Status == "empty") return Current switch
         {
@@ -116,6 +117,7 @@ public static class UiLanguage
             TraditionalChinese => "未發現裝置",
             _ => "未发现设备"
         };
+        if (hideUnreadableInformation && state.Battery is null) return "";
         if (state.Status == "mouse_offline") return Current switch
         {
             English => "Mouse disconnected or asleep",
@@ -140,6 +142,7 @@ public static class UiLanguage
             TraditionalChinese => state.Status == "device_busy" ? "正在讀取裝置" : "電量暫不可用",
             _ => state.Status == "device_busy" ? "设备正在被读取" : "电量暂不可用"
         };
+        if (hideUnreadableInformation && state.Charging is null) return $"{state.Battery}%";
         var charging = state.Charging switch
         {
             true => Current switch { English => "Charging", TraditionalChinese => "充電中", _ => "充电中" },

@@ -57,6 +57,8 @@ public sealed class AppearanceWindow : Window
             value => settings = settings with { ShowWiredHeadsets = value }));
         panel.Children.Add(Toggle(UiLanguage.ShowBluetoothHeadsets, settings.ShowBluetoothHeadsets,
             value => settings = settings with { ShowBluetoothHeadsets = value }));
+        panel.Children.Add(Toggle(UiLanguage.HideUnreadableInformation, settings.HideUnreadableInformation,
+            value => settings = settings with { HideUnreadableInformation = value }));
         Content = new ScrollViewer { Content = panel, Background = System.Windows.Media.Brushes.White,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         ready = true;

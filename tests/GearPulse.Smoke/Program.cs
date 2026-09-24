@@ -22,6 +22,23 @@ if (args.Contains("--logitech-integration", StringComparer.OrdinalIgnoreCase))
     return;
 }
 
+if (args.Contains("--razer-integration", StringComparer.OrdinalIgnoreCase))
+{
+    var discovered = RazerDeviceDiscovery.Resolve(AtkDeviceDiscovery.EnumerateNodes(false));
+    foreach (var device in AtkMouseHid.EnumerateVendor(0x1532))
+    {
+        var matched = discovered.Any(peripheral => RazerHid.IsBatteryInterface(device, peripheral));
+        Console.WriteLine($"Razer HID 1532:{device.Product:X4}: interface={RazerHid.InterfaceLabel(device.Path)}, " +
+            $"usage={device.UsagePage:X4}:{device.Usage:X4}, reports=input {device.InputLength}, " +
+            $"output {device.OutputLength}, feature {device.FeatureLength}, batteryInterface={matched}");
+    }
+    foreach (var sample in new RazerBatteryProvider().Read())
+        Console.WriteLine($"{sample.Name}: icon={sample.Icon}, connection={sample.Connection}, " +
+            $"status={sample.Status}, battery={sample.Battery?.ToString() ?? "unknown"}, " +
+            $"charging={sample.Charging?.ToString() ?? "unknown"}");
+    return;
+}
+
 if (args.Contains("--g522-integration", StringComparer.OrdinalIgnoreCase))
 {
     foreach (var state in G522Hid.Sample())
@@ -126,10 +143,19 @@ foreach (var (code, normal, charging, unknown, offline, unavailable) in new[]
     Check((localized with { Charging = null }).StatusText == unknown, $"{code} charging unknown");
     Check((localized with { Battery = null, Status = "mouse_offline" }).StatusText == offline, $"{code} offline");
     Check((localized with { Battery = null, Status = "error" }).StatusText == unavailable, $"{code} unavailable");
+    var hide = localized with { HideUnreadableInformation = true };
+    Check((hide with { Charging = null }).StatusText == "85%", $"{code} hide unknown charging");
+    Check((hide with { Battery = null, Status = "error" }).StatusText == "", $"{code} hide unknown battery");
+    Check((hide with { Battery = null, Status = "mouse_offline" }).StatusText == "", $"{code} hide offline detail");
+    Check(hide.StatusText == normal && (hide with { Charging = true }).StatusText == charging,
+        $"{code} preserve known charging state");
+    Check((new DeviceState("empty", "GearPulse", "battery", null, null, true, "empty")
+        { HideUnreadableInformation = true }).StatusText.Length > 0, $"{code} preserve empty card message");
     Check(!string.IsNullOrWhiteSpace(UiLanguage.WindowTitle) && !string.IsNullOrWhiteSpace(UiLanguage.ShowWidget)
         && !string.IsNullOrWhiteSpace(UiLanguage.StartWithWindows) && !string.IsNullOrWhiteSpace(UiLanguage.InstallFirst)
         && !string.IsNullOrWhiteSpace(UiLanguage.LanguageMenu) && !string.IsNullOrWhiteSpace(UiLanguage.Exit)
-        && !string.IsNullOrWhiteSpace(UiLanguage.AutostartError), $"{code} interface strings");
+        && !string.IsNullOrWhiteSpace(UiLanguage.AutostartError)
+        && !string.IsNullOrWhiteSpace(UiLanguage.HideUnreadableInformation), $"{code} interface strings");
 }
 var settingsPath = Path.Combine(Path.GetTempPath(), "GearPulse-language-test-" + Guid.NewGuid().ToString("N"), "settings.json");
 try
@@ -151,6 +177,9 @@ try
     var headsetSettings = appearance with { ShowWiredHeadsets = false, ShowBluetoothHeadsets = false };
     Check(headsetSettings.Save(settingsPath), "headset visibility settings save");
     Check(WidgetSettings.Load(settingsPath) == headsetSettings, "headset visibility settings reload");
+    var hiddenInformation = appearance with { HideUnreadableInformation = true };
+    Check(hiddenInformation.Save(settingsPath), "hidden information setting saves");
+    Check(WidgetSettings.Load(settingsPath) == hiddenInformation, "hidden information setting reloads");
     Check(appearance.Save(settingsPath), "restore appearance settings");
     File.WriteAllText(settingsPath, "{\"language\":\"en\",\"appearance\":{\"iconStyle\":\"bad\",\"size\":\"huge\",\"backgroundOpacity\":101,\"contentOpacity\":-4,\"corner\":\"bad\"}}");
     Check(WidgetSettings.Load(settingsPath) == new WidgetSettings("line", "medium", 100, 0), "invalid appearance normalized");
@@ -174,7 +203,7 @@ Check(WidgetPlacement.Calculate(area, 270, 88, 20, "bottom-right").Location == n
 Check(new WidgetSettings(Size: "small").Scale == .8 && new WidgetSettings(Size: "large").Scale == 1.25, "size presets");
 Check(new DeviceState("x", "X", "mouse", 20, false, true, "ok").IsLow, "20% low threshold");
 Check(!new DeviceState("x", "X", "mouse", 21, false, true, "ok").IsLow, "21% normal threshold");
-Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "atk-peripherals", "logitech-lightspeed", "logitech-g522-lightspeed", "windows-audio-headsets"]), "device order");
+Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "razer-peripherals", "atk-peripherals", "logitech-lightspeed", "logitech-g522-lightspeed", "windows-audio-headsets"]), "device order");
 Check(DeviceRoster.Initial().Count == 0, "no fixed BlackShark placeholder");
 Check(AudioHeadsetDiscovery.IsHeadset(3, "Headphones (Realtek Audio)"), "headphone form factor");
 Check(AudioHeadsetDiscovery.IsHeadset(5, "Generic Audio"), "headset form factor");
@@ -208,7 +237,104 @@ Check(HeadsetRoster.Merge([
     new("audio-1", "Headphones", "headset", null, null, true, "unavailable"),
     new("audio-2", "Headphones", "headset", null, null, true, "unavailable")
 ]).Count == 2, "same-name physical headsets stay distinct without shared identity");
+var razerContainer = Guid.NewGuid();
+var razerBluetoothContainer = Guid.NewGuid();
+var razerNodes = new AtkDeviceDiscovery.Node[]
+{
+    new(razerContainer, "USB\\VID_1532&PID_00C1\\A", 0x1532, 0x00c1,
+        "Razer Viper V3 Pro", "Razer", "Mouse"),
+    new(razerContainer, "HID\\VID_1532&PID_00C1\\B", 0x1532, 0x00c1,
+        "HID-compliant mouse", "Razer", "HIDClass"),
+    new(Guid.NewGuid(), "USB\\VID_1532&PID_00B3\\D", 0x1532, 0x00b3,
+        "Razer HyperPolling Wireless Dongle", "Razer", "Mouse"),
+    new(razerBluetoothContainer, "BTHLEDEVICE\\RAZER-A", 0, 0,
+        "Razer Orochi V2", "Razer", "Mouse", null, true),
+    new(razerBluetoothContainer, "BTHLE\\BATTERY-A", 0, 0,
+        "Bluetooth Battery", "", "Bluetooth", 67, true),
+    new(Guid.NewGuid(), "BTHLEDEVICE\\RAZER-B", 0, 0,
+        "Razer Viper", "Razer", "Mouse", 91, false),
+    new(Guid.NewGuid(), "USB\\VID_1532&PID_0555\\H", 0x1532, 0x0555,
+        "Razer BlackShark V2 Pro", "Razer", "Media")
+};
+var razerResolved = RazerDeviceDiscovery.Resolve(razerNodes);
+Check(razerResolved.Count == 4, "Razer present devices and multi-interface grouping");
+Check(razerResolved.Single(x => x.Product == 0x00c1).Icon == "mouse", "Razer mouse type");
+Check(razerResolved.Single(x => x.Product == 0x00b3).Name.Contains("Dongle"), "unidentified paired mouse keeps receiver name");
+Check(razerResolved.Single(x => x.Connection == "bluetooth").Battery == 67, "connected Bluetooth battery");
+Check(razerResolved.Single(x => x.Product == 0x0555).Icon == "headset", "Razer headset type");
+foreach (var (product, connection) in new[] { (0x00e5, "wired"), (0x00e6, "wireless") })
+{
+    var container = Guid.NewGuid();
+    var v4 = RazerDeviceDiscovery.Resolve([
+        new(container, $"USB\\VID_1532&PID_{product:X4}\\A", 0x1532, product,
+            "Razer control device", "Razer", "Mouse"),
+        new(container, $"HID\\VID_1532&PID_{product:X4}&MI_03\\B", 0x1532, product,
+            "HID-compliant mouse", "Razer", "HIDClass")
+    ]);
+    Check(v4.Count == 1 && v4[0].Name == "Razer Viper V4 Pro" &&
+        v4[0].Connection == connection && v4[0].Icon == "mouse",
+        $"Viper V4 Pro {connection} name and interface grouping");
+    AtkMouseHid.Device Interface(string path, int feature = 91) => new()
+    {
+        Path = $@"\\?\hid#vid_1532&pid_{product:x4}&{path}#device#{{guid}}",
+        Vendor = 0x1532, Product = product, ContainerId = container,
+        FeatureLength = feature, UsagePage = 1, Usage = 2
+    };
+    Check(RazerHid.IsBatteryInterface(Interface("mi_03"), v4[0]) &&
+        RazerHid.IsBatteryInterface(Interface("mi_04"), v4[0]) &&
+        !RazerHid.IsBatteryInterface(Interface("mi_00"), v4[0]) &&
+        !RazerHid.IsBatteryInterface(Interface("mi_03&col02"), v4[0]) &&
+        !RazerHid.IsBatteryInterface(Interface("mi_03", 64), v4[0]),
+        $"Viper V4 Pro {connection} battery interface allowlist");
+}
+Check(HeadsetRoster.Merge([
+    new("blackshark-v2-pro", "BLACKSHARK V2 PRO", "headset", 79, false, true, "ok", "wireless", razerResolved.Single(x => x.Product == 0x0555).ContainerId),
+    new("razer-headset", "Razer BlackShark V2 Pro", "headset", null, null, true, "unavailable", "wireless", razerResolved.Single(x => x.Product == 0x0555).ContainerId)
+]).Count == 1, "BlackShark generic discovery merges with verified reader");
+Check(HeadsetRoster.Merge([
+    new("blackshark-v2-pro", "BLACKSHARK V2 PRO", "headset", null, null, true, "unavailable", "wireless"),
+    new("razer-headset", "Razer BlackShark V2 Pro", "headset", null, null, true, "unavailable", "wireless")
+]).Count == 1, "BlackShark remains one row without container property");
+Check(RazerHid.ForProduct(0x00c1)?.Transaction == 0x1f &&
+    RazerHid.ForProduct(0x0271)?.Transaction == 0x9f &&
+    RazerHid.ForProduct(0x00e5) is { Transaction: 0x1f, Charging: false } &&
+    RazerHid.ForProduct(0x00e6) is { Transaction: 0x1f, Charging: false } &&
+    RazerHid.ForProduct(0x0555) is null, "Razer protocol product allowlist");
+var razerRequest = RazerHid.Frame(0x1f, 0x80);
+Check(razerRequest.Length == 91 && razerRequest[2] == 0x1f &&
+    razerRequest[7] == 7 && razerRequest[8] == 0x80, "Razer read-only battery request");
+byte[] RazerReply(byte command, byte value)
+{
+    var reply = RazerHid.Frame(0x1f, command);
+    reply[1] = 2;
+    reply[10] = value;
+    byte crc = 0;
+    for (var i = 3; i <= 88; i++) crc ^= reply[i];
+    reply[89] = crc;
+    return reply;
+}
+var razerBatteryReply = RazerReply(0x80, 204);
+var razerChargingReply = RazerReply(0x84, 1);
+Check(RazerHid.FromReplies(razerBatteryReply, razerChargingReply, 0x1f, true) ==
+    new RazerHid.Result(80, true), "Razer battery and charging parse");
+Check(RazerHid.FromReplies(null, razerChargingReply, 0x1f, true) ==
+    new RazerHid.Result(null, null), "Razer timeout clears both readings");
+Check(RazerHid.FromReplies(RazerReply(0x80, 204), null, 0x1f, false) ==
+    new RazerHid.Result(80, null) &&
+    RazerHid.FromReplies(null, null, 0x1f, false) == new RazerHid.Result(null, null),
+    "Viper V4 Pro battery reading and failed-poll clearing without inferred charging");
+razerBatteryReply[89] ^= 1;
+Check(RazerHid.Parse(razerBatteryReply, 0x1f, 0x80) is null, "Razer CRC rejection");
+Check(RazerHid.Parse(RazerReply(0x80, 0), 0x1f, 0x80) is null, "sleeping receiver zero is unknown");
 Check(DeviceRoster.Visible(headsets, new WidgetSettings(ShowWiredHeadsets: false)).Count == 1, "wired setting filters only wired headset");
+var hideUnknownSample = new DeviceState("v4", "Razer Viper V4 Pro", "mouse", 85, null, true, "ok");
+var beforeHide = DeviceRoster.Visible([hideUnknownSample], new WidgetSettings());
+var afterHide = DeviceRoster.Visible([hideUnknownSample], new WidgetSettings(HideUnreadableInformation: true));
+Check(beforeHide.Count == 1 && beforeHide[0].StatusText.Contains("充电状态未知") &&
+    afterHide.Count == 1 && afterHide[0].Name == hideUnknownSample.Name &&
+    afterHide[0].Icon == hideUnknownSample.Icon && afterHide[0].StatusText == "85%" &&
+    DeviceRoster.Visible(afterHide, new WidgetSettings())[0].StatusText.Contains("充电状态未知"),
+    "appearance toggle immediately changes detail text without hiding the device");
 Check(DeviceRoster.Visible([
     new("bt", "Bluetooth Headphones", "headset", null, null, true, "unavailable", "bluetooth"),
     new("w", "Wireless Headset", "headset", null, null, true, "unavailable", "wireless")

@@ -1,4 +1,15 @@
-#define AppVersion "1.2.0"
+#ifndef AppVersion
+  #define AppVersion "1.2.0"
+#endif
+#ifndef SourceExe
+  #define SourceExe "..\publish\win-x64\GearPulse.exe"
+#endif
+#ifndef SetupName
+  #define SetupName "GearPulse-1.2.0-Setup"
+#endif
+#ifndef TestSetupName
+  #define TestSetupName "GearPulse-1.2.0-Test-Setup"
+#endif
 #ifndef TestBuild
   #define TestBuild "0"
 #endif
@@ -14,14 +25,14 @@
   #define TaskName "GearPulse.InstallerTest"
   #define InstallDir TestInstallDir
   #define UserDataDir TestUserDataDir
-  #define OutputName "GearPulse-1.2.0-Test-Setup"
+  #define OutputName TestSetupName
 #else
   #define InstallName "GearPulse"
   #define InstallerAppId "GearPulse.1F6B89C9"
   #define TaskName "GearPulse"
   #define InstallDir "{localappdata}\Programs\GearPulse"
   #define UserDataDir "{localappdata}\GearPulse"
-  #define OutputName "GearPulse-1.2.0-Setup"
+  #define OutputName SetupName
 #endif
 
 [Setup]
@@ -42,8 +53,8 @@ Compression=lzma2
 SolidCompression=yes
 UsePreviousTasks=yes
 CloseApplications=no
-VersionInfoVersion=1.2.0.0
-VersionInfoDescription=GearPulse v1.2 installer
+VersionInfoVersion={#AppVersion}.0
+VersionInfoDescription=GearPulse v{#AppVersion} installer
 UninstallDisplayIcon={app}\GearPulse.exe
 
 [Languages]
@@ -66,7 +77,7 @@ zhtw.TaskError=無法設定 GearPulse 登入工作。
 Name: "autostart"; Description: "{cm:StartupTask}"
 
 [Files]
-Source: "..\publish\win-x64\GearPulse.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "InstallerTask.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "InstallerTask.ps1"; Flags: dontcopy
