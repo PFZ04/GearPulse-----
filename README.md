@@ -1,12 +1,13 @@
 # GearPulse｜外设脉动
 
-当前安装包版本：**V1.2**（产品版本 `1.2.0`，Windows 文件版本 `1.2.0.0`）。**V1.3** 已通过实机验证；最新独立候选程序为 **V1.3.3**（产品版本 `1.3.3`，Windows 文件版本 `1.3.3.0`），位于 `publish\1.3.3-razer-candidate\GearPulse.exe`。雷蛇通用支持尚未经过其他型号的实机验证。
+最新候选版为 **V1.3.5**：独立程序位于 `publish\1.3.5-hide-unreadable-candidate\GearPulse.exe`，安装包位于 `publish\GearPulse-1.3.5-Setup.exe`。安装包已编译，尚未在本机运行；本机当前安装版仍为 **V1.2.0**。Viper V4 Pro 的型号和电量已由用户实机验证，充电状态不可读；其他雷蛇型号的通用电量读取尚未实机验证。
 
 Windows 桌面电量小组件，发现已连接的 Razer 鼠标、键盘和耳机、通过 USB 接收器或有线 USB 连接的 ATK／VXE／VGN 外设，以及通过 HID++ LIGHTSPEED 接收器连接并报告真实百分比的罗技鼠标和键盘。正式程序是 .NET 10 WPF 独立 EXE，不需要 PowerShell 常驻运行；PowerShell 仅用于构建、安装和诊断。
 
 | 设备 | 识别方式 | 行为 |
 |---|---|---|
 | BlackShark V2 Pro | `1532:0555` | 电量、充电状态和接收器状态。 |
+| Razer Viper V4 Pro | 有线 `1532:00E5`、无线 `1532:00E6` | 用户实测可显示型号与电量；充电状态未知。 |
 | Razer 鼠标／键盘／耳机 | Windows USB 或已连接蓝牙设备 | 自动发现、按设备容器去重；部分明确支持的 USB／接收器鼠标和键盘使用只读 HID 查询，蓝牙使用 Windows 提供的电量值，其他设备显示“电量暂不可用”。无法确认配对型号的接收器使用接收器名称。 |
 | ATK／VXE／VGN 鼠标、键盘、耳机 | USB 设备容器、厂商信息或已收录的产品 ID | 自动发现并去重；产品 ID 只用于发现设备，不直接决定鼠标型号。有已验证电量协议时读取百分比，否则显示“电量暂不可用”。 |
 | ATK F1 V3 Ultimate+、A9 Plus NK | 接收器 `373B:1278`、`373B:10C9` 与鼠标身份应答 | 保留已实测的在线、型号和电量查询；无线型号需要有效身份应答，休眠或查询失败时清除旧型号和电量。 |
@@ -19,18 +20,20 @@ Windows 桌面电量小组件，发现已连接的 Razer 鼠标、键盘和耳�
 
 用户还报告 **ATK A9 Mini+**：有线模式下型号、电量和充电状态正常；接收器模式下界面显示 `ATK 8K Dongle`，电量和充电状态正常。接收器模式的鼠标型号识别仍未确认。
 
+用户已确认 **Razer Viper V4 Pro** 可显示正确型号和电量，但无法读取充电状态。实测时的连接方式、电量数值、休眠和接收器拔插结果尚未提供。
+
 ## 构建与安装
 
 普通用户可直接运行 `publish\GearPulse-1.3.5-Setup.exe` 安装 1.3.5 候选版，无需安装 .NET SDK。安装向导默认勾选登录时启动；可取消，之后仍可从托盘切换。安装包只为当前 Windows 用户安装，并在卸载时询问是否清除设置与日志。当前本机仍使用 1.2.0，尚未运行新版安装包。制作安装包的步骤见 [安装包说明](installer/README.md)。
 
-在 Windows x64 上安装 .NET 10 SDK，然后在仓库目录运行：
+需要从源码重新生成 V1.3.5 程序和安装包时，在 Windows x64 上安装 .NET 10 SDK 和 Inno Setup 7，然后在仓库目录运行：
 
 ```powershell
-pwsh -NoProfile -File .\Publish-GearPulse.ps1
-pwsh -NoProfile -File .\Install-BatteryWidget.ps1
+pwsh -NoProfile -File .\Publish-GearPulse.ps1 -OutputPath .\publish\1.3.5-hide-unreadable-candidate
+pwsh -NoProfile -File .\Build-Installer.ps1 -SourceExe .\publish\1.3.5-hide-unreadable-candidate\GearPulse.exe -ExpectedVersion 1.3.5
 ```
 
-V1.2 增加两套图标、三档尺寸、独立的背景与内容透明度，以及显示器和角落选择。当前发布目录是 `publish\win-x64\GearPulse.exe`；安装脚本将当前用户的 `GearPulse` 登录任务指向该 EXE。V1.3.5 独立候选程序在 `publish\1.3.5-hide-unreadable-candidate\GearPulse.exe`，不会自动替换当前发布程序；重新构建可运行 `pwsh -NoProfile -File .\Publish-GearPulse.ps1 -OutputPath .\publish\1.3.5-hide-unreadable-candidate`。“外观设置”中的“隐藏无法读取的信息”默认关闭，开启后保留设备行，仅收起无法读取的状态文字。详细操作见 [WIDGET-README.md](WIDGET-README.md)。
+V1.3.5 的“外观设置”新增“隐藏无法读取的信息”，默认关闭。开启后，设备名称和图标仍显示；电量可读但充电状态未知时只显示百分比，电量也不可读时收起状态文字。该设置会保存并即时生效。现有 `publish\win-x64\GearPulse.exe` 仍是本机使用的 V1.2.0；构建候选版或安装包不会替换它。详细操作见 [WIDGET-README.md](WIDGET-README.md)。
 
 ## 验证
 
