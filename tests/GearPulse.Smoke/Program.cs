@@ -43,6 +43,13 @@ if (args.Contains("--devices-integration", StringComparer.OrdinalIgnoreCase))
     return;
 }
 
+if (args.Contains("--atk-integration", StringComparer.OrdinalIgnoreCase))
+{
+    foreach (var state in new AtkBatteryProvider().Read())
+        Console.WriteLine($"{state.Name}: {state.Status}, battery={state.Battery?.ToString() ?? "unknown"}, charging={state.Charging?.ToString() ?? "unknown"}");
+    return;
+}
+
 var checks = 0;
 void Check(bool value, string message)
 {
@@ -61,9 +68,47 @@ var cases = new (DeviceState state, string text)[]
     (new("x", "X", "battery", 82, null, true, "ok"), "82% · 充电状态未知")
 };
 foreach (var item in cases) Check(item.state.StatusText == item.text, item.text);
+var localized = new DeviceState("x", "X", "mouse", 85, false, true, "ok");
+foreach (var (code, normal, charging, unknown, offline, unavailable) in new[]
+{
+    (UiLanguage.SimplifiedChinese, "85% · 未充电", "85% · 充电中", "85% · 充电状态未知", "鼠标未连接或休眠", "电量暂不可用"),
+    (UiLanguage.English, "85% · Not charging", "85% · Charging", "85% · Charging status unknown", "Mouse disconnected or asleep", "Battery unavailable"),
+    (UiLanguage.TraditionalChinese, "85% · 未充電", "85% · 充電中", "85% · 充電狀態未知", "滑鼠未連接或休眠", "電量暫不可用")
+})
+{
+    UiLanguage.Select(code);
+    Check(localized.StatusText == normal, $"{code} immediate status refresh");
+    Check((localized with { Charging = true }).StatusText == charging, $"{code} charging");
+    Check((localized with { Charging = null }).StatusText == unknown, $"{code} charging unknown");
+    Check((localized with { Battery = null, Status = "mouse_offline" }).StatusText == offline, $"{code} offline");
+    Check((localized with { Battery = null, Status = "error" }).StatusText == unavailable, $"{code} unavailable");
+    Check(!string.IsNullOrWhiteSpace(UiLanguage.WindowTitle) && !string.IsNullOrWhiteSpace(UiLanguage.ShowWidget)
+        && !string.IsNullOrWhiteSpace(UiLanguage.StartWithWindows) && !string.IsNullOrWhiteSpace(UiLanguage.InstallFirst)
+        && !string.IsNullOrWhiteSpace(UiLanguage.LanguageMenu) && !string.IsNullOrWhiteSpace(UiLanguage.Exit)
+        && !string.IsNullOrWhiteSpace(UiLanguage.AutostartError), $"{code} interface strings");
+}
+var settingsPath = Path.Combine(Path.GetTempPath(), "GearPulse-language-test-" + Guid.NewGuid().ToString("N"), "settings.json");
+try
+{
+    UiLanguage.Load(settingsPath);
+    Check(UiLanguage.Current == UiLanguage.SimplifiedChinese, "missing language defaults to simplified Chinese");
+    UiLanguage.Select(UiLanguage.TraditionalChinese);
+    Check(UiLanguage.Save(settingsPath), "language saves");
+    UiLanguage.Select(UiLanguage.English);
+    UiLanguage.Load(settingsPath);
+    Check(UiLanguage.Current == UiLanguage.TraditionalChinese, "language survives restart");
+    File.WriteAllText(settingsPath, "{\"language\":\"invalid\"}");
+    UiLanguage.Load(settingsPath);
+    Check(UiLanguage.Current == UiLanguage.SimplifiedChinese, "invalid language defaults");
+}
+finally
+{
+    Directory.Delete(Path.GetDirectoryName(settingsPath)!, true);
+    UiLanguage.Select(UiLanguage.SimplifiedChinese);
+}
 Check(new DeviceState("x", "X", "mouse", 20, false, true, "ok").IsLow, "20% low threshold");
 Check(!new DeviceState("x", "X", "mouse", 21, false, true, "ok").IsLow, "21% normal threshold");
-Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "atk-f1-v3", "atk-a9-plus", "logitech-lightspeed"]), "device order");
+Check(DeviceRoster.Providers.Select(p => p.Id).SequenceEqual(["blackshark-v2-pro", "atk-peripherals", "logitech-lightspeed"]), "device order");
 Check(DeviceRoster.Visible([
     new("h", "H", "headset", null, null, true, "pending"),
     new("m", "M", "mouse", null, null, false, "hidden")
@@ -75,8 +120,34 @@ Check(BlackSharkHid.Parse(input, 0x21) == 95, "battery parser");
 input[15] = 101;
 Check(BlackSharkHid.Parse(input, 0x21) is null, "battery range");
 Check(AtkMouseHid.QueryFrame(3).Length == 16, "ATK query shape");
+Check(AtkMouseHid.ValidChecksum(AtkMouseHid.QueryFrame(4)), "ATK report checksum");
+var corruptedAtk = AtkMouseHid.QueryFrame(4);
+corruptedAtk[5]++;
+Check(!AtkMouseHid.ValidChecksum(corruptedAtk), "ATK bad checksum rejected");
 try { AtkMouseHid.QueryFrame(5); throw new Exception("ATK unsafe command allowed"); }
 catch (ArgumentException) { checks++; }
+var receiverA = Guid.NewGuid();
+var receiverB = Guid.NewGuid();
+var atkNodes = new AtkDeviceDiscovery.Node[]
+{
+    new(receiverA, "USB\\VID_373B&PID_1278\\A", 0x373b, 0x1278, "USB Composite Device", "Compx", "USB"),
+    new(receiverA, "HID\\VID_373B&PID_1278\\A", 0x373b, 0x1278, "HID-compliant mouse", "Compx", "Mouse"),
+    new(receiverB, "USB\\VID_373B&PID_1278\\B", 0x373b, 0x1278, "USB Composite Device", "Compx", "USB"),
+    new(Guid.NewGuid(), "USB\\VID_3554&PID_2000\\K", 0x3554, 0x2000, "VXE K75 Receiver", "VXE", "Keyboard"),
+    new(Guid.NewGuid(), "USB\\VID_3554&PID_2001\\H", 0x3554, 0x2001, "ATK Headset", "ATK", "Media"),
+    new(Guid.NewGuid(), "USB\\VID_3554&PID_2002\\K", 0x3554, 0x2002, "ATK68 V3", "Unknown", "Keyboard"),
+    new(Guid.NewGuid(), "USB\\VID_3554&PID_F58A\\R", 0x3554, 0xf58a, "Compx Receiver", "Compx", "Mouse"),
+    new(Guid.NewGuid(), "USB\\VID_373B&PID_9999\\X", 0x373b, 0x9999, "Compx receiver", "Compx", "Mouse")
+};
+var atkResolved = AtkDeviceDiscovery.Resolve(atkNodes);
+Check(atkResolved.Count == 6, "ATK multi-interface dedup and unrelated Compx exclusion");
+Check(atkResolved.Count(p => p.Name == "ATK F1 V3 ULTIMATE+") == 2, "same receiver model remains distinct");
+Check(atkResolved.Select(p => p.Id).Distinct().Count() == 6, "ATK ids unique by container");
+Check(atkResolved.Any(p => p.Name == "VXE R1 Pro Max" && p.Icon == "mouse"), "published receiver ID admitted");
+Check(atkResolved.Any(p => p.Name == "ATK68 V3" && p.Icon == "keyboard"), "compact ATK model name admitted");
+Check(atkResolved.Any(p => p.Name == "VXE K75 Receiver" && p.Icon == "keyboard"), "unknown keyboard uses receiver name");
+Check(atkResolved.Any(p => p.Name == "ATK Headset" && p.Icon == "headset"), "headset discovery");
+Check(new DeviceState("atk", "ATK Headset", "headset", null, null, true, "unavailable").StatusText == "电量暂不可用", "unknown ATK battery visible");
 
 var logitechRoot = LogitechHid.BuildRequest(1, 0, 0, 0x1004);
 Check(logitechRoot[0] == 0x11 && logitechRoot[1] == 1 && logitechRoot[2] == 0 && logitechRoot[4] == 0x10 && logitechRoot[5] == 4, "Logitech feature discovery request");

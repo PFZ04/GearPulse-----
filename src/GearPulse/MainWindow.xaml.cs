@@ -47,9 +47,16 @@ public partial class MainWindow : Window
     public ObservableCollection<DeviceState> VisibleStates => visibleStates;
     public bool IsUserVisible => !userHidden;
 
+    public void RefreshLanguage()
+    {
+        Title = UiLanguage.WindowTitle;
+        ApplyStates(visibleStates.ToArray());
+    }
+
     public MainWindow()
     {
         InitializeComponent();
+        Title = UiLanguage.WindowTitle;
         DataContext = this;
         ApplyStates(DeviceRoster.Initial());
         SourceInitialized += (_, _) =>

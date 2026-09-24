@@ -11,7 +11,8 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        if (args.Length != 1) throw new ArgumentException("Pass the output PNG path.");
+        if (args.Length is < 1 or > 2) throw new ArgumentException("Pass the output PNG path and optional language code.");
+        UiLanguage.Select(args.Length == 2 ? args[1] : UiLanguage.SimplifiedChinese);
         var window = new MainWindow();
         window.VisibleStates.Clear();
         window.VisibleStates.Add(new("blackshark-v2-pro", "BLACKSHARK V2 PRO", "headset", 79, false, true, "ok"));

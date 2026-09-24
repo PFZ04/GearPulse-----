@@ -8,6 +8,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using Microsoft.Win32.SafeHandles;
 
@@ -15,6 +16,8 @@ public static class AtkMouseHid
 {
     [StructLayout(LayoutKind.Sequential)] struct InterfaceData { public int Size; public Guid Class; public int Flags; public IntPtr Reserved; }
     [StructLayout(LayoutKind.Sequential)] struct Attributes { public int Size; public ushort Vendor, Product, Version; }
+    [StructLayout(LayoutKind.Sequential)] struct DeviceInfoData { public int Size; public Guid Class; public uint DevInst; public IntPtr Reserved; }
+    [StructLayout(LayoutKind.Sequential)] struct PropertyKey { public Guid Format; public uint Id; }
     [StructLayout(LayoutKind.Sequential)] struct Caps {
         public ushort Usage, UsagePage, Input, Output, Feature;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst=17)] public ushort[] Reserved;
@@ -23,12 +26,16 @@ public static class AtkMouseHid
     [StructLayout(LayoutKind.Sequential)] struct Overlapped { public IntPtr Internal, InternalHigh; public uint Offset, OffsetHigh; public IntPtr Event; }
     [DllImport("hid.dll")] static extern void HidD_GetHidGuid(out Guid guid);
     [DllImport("hid.dll")] static extern bool HidD_GetAttributes(SafeFileHandle h, ref Attributes a);
+    [DllImport("hid.dll", CharSet=CharSet.Unicode)] static extern bool HidD_GetProductString(SafeFileHandle h, StringBuilder text, int byteLength);
+    [DllImport("hid.dll", CharSet=CharSet.Unicode)] static extern bool HidD_GetManufacturerString(SafeFileHandle h, StringBuilder text, int byteLength);
     [DllImport("hid.dll")] static extern bool HidD_GetPreparsedData(SafeFileHandle h, out IntPtr p);
     [DllImport("hid.dll")] static extern bool HidD_FreePreparsedData(IntPtr p);
     [DllImport("hid.dll")] static extern int HidP_GetCaps(IntPtr p, out Caps caps);
     [DllImport("setupapi.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern IntPtr SetupDiGetClassDevsW(ref Guid guid, string enumerator, IntPtr hwnd, uint flags);
     [DllImport("setupapi.dll", SetLastError=true)] static extern bool SetupDiEnumDeviceInterfaces(IntPtr set, IntPtr device, ref Guid guid, uint index, ref InterfaceData data);
     [DllImport("setupapi.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool SetupDiGetDeviceInterfaceDetailW(IntPtr set, ref InterfaceData data, IntPtr detail, uint size, out uint needed, IntPtr device);
+    [DllImport("setupapi.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool SetupDiGetDeviceInterfaceDetailW(IntPtr set, ref InterfaceData data, IntPtr detail, uint size, out uint needed, ref DeviceInfoData device);
+    [DllImport("setupapi.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool SetupDiGetDevicePropertyW(IntPtr set, ref DeviceInfoData device, ref PropertyKey key, out uint type, byte[] value, uint length, out uint needed, uint flags);
     [DllImport("setupapi.dll")] static extern bool SetupDiDestroyDeviceInfoList(IntPtr set);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool ReadFile(SafeFileHandle h, IntPtr buffer, uint count, IntPtr bytes, IntPtr ov);
@@ -36,7 +43,7 @@ public static class AtkMouseHid
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetOverlappedResult(SafeFileHandle h, IntPtr ov, out uint bytes, bool wait);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool CancelIoEx(SafeFileHandle h, IntPtr ov);
 
-    public sealed class Device { public string Path { get; set; } public int InputLength { get; set; } public int OutputLength { get; set; } public int FeatureLength { get; set; } public int UsagePage { get; set; } public int Usage { get; set; } public int Product { get; set; } }
+    public sealed class Device { public string Path { get; set; } public int InputLength { get; set; } public int OutputLength { get; set; } public int FeatureLength { get; set; } public int UsagePage { get; set; } public int Usage { get; set; } public int Vendor { get; set; } public int Product { get; set; } public Guid ContainerId { get; set; } public string ProductName { get; set; } public string ManufacturerName { get; set; } }
     public sealed class Result { public string Status { get; set; } = "unavailable"; public bool ReceiverPresent { get; set; } public bool? Online { get; set; } public int? Battery { get; set; } public bool? Charging { get; set; } public int? Cid { get; set; } public int? Mid { get; set; } public string Name { get; set; } public string Error { get; set; } public Device Device { get; set; } }
 
     public static Device[] Enumerate()
@@ -57,18 +64,26 @@ public static class AtkMouseHid
                 IntPtr detail = Marshal.AllocHGlobal((int)needed);
                 try {
                     Marshal.WriteInt32(detail, IntPtr.Size==8 ? 8 : 6);
-                    if (!SetupDiGetDeviceInterfaceDetailW(set, ref data, detail, needed, out needed, IntPtr.Zero)) throw new Win32Exception();
+                    var info = new DeviceInfoData { Size=Marshal.SizeOf<DeviceInfoData>() };
+                    if (!SetupDiGetDeviceInterfaceDetailW(set, ref data, detail, needed, out needed, ref info)) throw new Win32Exception();
                     string path = Marshal.PtrToStringUni(IntPtr.Add(detail, 4));
-                    if (!path.ToLowerInvariant().Contains("vid_373b&pid_")) continue;
+                    if (path==null || !(path.Contains("vid_373b&pid_",StringComparison.OrdinalIgnoreCase) || path.Contains("vid_3554&pid_",StringComparison.OrdinalIgnoreCase))) continue;
                     using (var h = CreateFileW(path, 0, 3, IntPtr.Zero, 3, 0, IntPtr.Zero)) {
                         if (h.IsInvalid) continue;
                         var a = new Attributes { Size=Marshal.SizeOf<Attributes>() };
-                        if (!HidD_GetAttributes(h, ref a) || a.Vendor!=0x373b) continue;
+                        if (!HidD_GetAttributes(h, ref a) || (a.Vendor!=0x373b && a.Vendor!=0x3554)) continue;
                         if (!HidD_GetPreparsedData(h, out IntPtr p)) continue;
                         try {
                             if (HidP_GetCaps(p, out Caps c)!=0x110000) continue;
-                            if (c.UsagePage==0xff02 && c.Usage==2 && c.Input==17 && c.Output==17 && (a.Product==0x1278 || a.Product==0x10c9))
-                                found.Add(new Device { Path=path, InputLength=c.Input, OutputLength=c.Output, FeatureLength=c.Feature, UsagePage=c.UsagePage, Usage=c.Usage, Product=a.Product });
+                            if (c.UsagePage==0xff02 && c.Usage==2 && c.Input==17 && c.Output==17) {
+                                var key=new PropertyKey { Format=new Guid("8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c"), Id=2 };
+                                var bytes=new byte[16];
+                                Guid container=SetupDiGetDevicePropertyW(set,ref info,ref key,out uint type,bytes,16,out uint ignored,0) && type==0x0000000d ? new Guid(bytes) : Guid.Empty;
+                                var productName=new StringBuilder(256); var manufacturerName=new StringBuilder(256);
+                                HidD_GetProductString(h,productName,512);
+                                HidD_GetManufacturerString(h,manufacturerName,512);
+                                found.Add(new Device { Path=path, InputLength=c.Input, OutputLength=c.Output, FeatureLength=c.Feature, UsagePage=c.UsagePage, Usage=c.Usage, Vendor=a.Vendor, Product=a.Product, ContainerId=container, ProductName=productName.ToString(), ManufacturerName=manufacturerName.ToString() });
+                            }
                         } finally { HidD_FreePreparsedData(p); }
                     }
                 } finally { Marshal.FreeHGlobal(detail); }
@@ -119,7 +134,7 @@ public static class AtkMouseHid
             int remaining=Math.Max(1,timeout-(int)timer.ElapsedMilliseconds);
             byte[] report=Transfer(h,null,device.InputLength,remaining,first ? (Action)(()=>Transfer(h,output,output.Length,500)) : null);
             first=false;
-            if (report.Length>=17 && report[1]==command) {
+            if (report.Length==device.InputLength && report[0]==8 && report[1]==command) {
                 byte[] payload=new byte[16]; Array.Copy(report,1,payload,0,16); return payload;
             }
         }
@@ -130,8 +145,12 @@ public static class AtkMouseHid
     {
         if (device==null) throw new ArgumentNullException(nameof(device));
         var r=new Result { ReceiverPresent=true, Device=device,
-            Name=device.Product==0x1278 ? "ATK F1 V3 ULTIMATE+" : "ATK A9 PLUS NK" };
-        using (var mutex=new Mutex(false,"Local\\AtkMouseBattery-373B-"+device.Product.ToString("X4"))) {
+            Name=device.Vendor==0x373b && device.Product==0x1278 ? "ATK F1 V3 ULTIMATE+" :
+                device.Vendor==0x373b && device.Product==0x10c9 ? "ATK A9 PLUS NK" : "ATK MOUSE" };
+        string mutexName=device.Vendor==0x373b && (device.Product==0x1278 || device.Product==0x10c9)
+            ? "Local\\AtkMouseBattery-373B-"+device.Product.ToString("X4")
+            : "Local\\AtkMouseBattery-"+device.Vendor.ToString("X4")+"-"+device.Product.ToString("X4")+"-"+device.ContainerId.ToString("N");
+        using (var mutex=new Mutex(false,mutexName)) {
             bool held=false;
             try {
                 try { held=mutex.WaitOne(0); }
@@ -147,22 +166,36 @@ public static class AtkMouseHid
         try {
             using (var h=CreateFileW(r.Device.Path,0xc0000000,3,IntPtr.Zero,3,0x40000000,IntPtr.Zero)) {
                 if (h.IsInvalid) throw new Win32Exception();
-                byte[] online=Query(h,r.Device,3,timeout);
-                if (online[1]!=0 || online[5]>1) throw new InvalidDataException("Invalid mouse online response.");
-                if (online[5]==0) { r.Online=false; r.Status="mouse_offline"; return r; }
-                r.Online=true;
-                byte[] identity=Query(h,r.Device,16,timeout);
-                if (identity[1]!=0) throw new InvalidDataException("Mouse identity query failed.");
-                r.Cid=identity[5]; r.Mid=identity[6];
-                r.Name=r.Cid==1 && r.Mid==62 ? "ATK F1 V3 ULTIMATE+" :
-                    r.Cid==1 && r.Mid==85 ? "ATK F1 V3 ULTIMATE" :
-                    r.Cid==2 && r.Mid==83 ? "ATK A9 PLUS NK" : "ATK MOUSE";
+                bool verifiedReceiver=r.Device.Vendor==0x373b && (r.Device.Product==0x1278 || r.Device.Product==0x10c9);
+                if (verifiedReceiver) {
+                    byte[] online=Query(h,r.Device,3,timeout);
+                    if (online[1]!=0 || online[5]>1) throw new InvalidDataException("Invalid mouse online response.");
+                    if (online[5]==0) { r.Online=false; r.Status="mouse_offline"; return r; }
+                    r.Online=true;
+                    byte[] identity=Query(h,r.Device,16,timeout);
+                    if (identity[1]!=0) throw new InvalidDataException("Mouse identity query failed.");
+                    r.Cid=identity[5]; r.Mid=identity[6];
+                    r.Name=r.Cid==1 && r.Mid==62 ? "ATK F1 V3 ULTIMATE+" :
+                        r.Cid==1 && r.Mid==85 ? "ATK F1 V3 ULTIMATE" :
+                        r.Cid==2 && r.Mid==83 ? "ATK A9 PLUS NK" : r.Name;
+                }
                 byte[] battery=Query(h,r.Device,4,timeout);
-                if (battery[1]!=0 || battery[5]>100) throw new InvalidDataException("Invalid mouse battery response.");
-                r.Battery=battery[5]; r.Charging=battery[6]==0 ? false : battery[6]==1 ? true : (bool?)null; r.Status="ok";
+                if (battery[1]!=0 || battery[5]>100 || (!verifiedReceiver && !ValidChecksum(battery)))
+                    throw new InvalidDataException("Invalid mouse battery response.");
+                r.Battery=battery[5];
+                r.Charging=battery[6]==0 ? false : battery[6]==1 ? (verifiedReceiver || battery[5]<100) : (bool?)null;
+                r.Status="ok";
             }
         } catch (Exception e) { r.Status="error"; r.Error=e.Message; r.Battery=null; r.Charging=null; }
         return r;
+    }
+
+    public static bool ValidChecksum(byte[] payload)
+    {
+        if (payload==null || payload.Length!=16) return false;
+        int sum=8;
+        foreach (byte value in payload) sum+=value;
+        return (sum&255)==0x55;
     }
 
     public static Result[] SampleAll(int timeout=1000)

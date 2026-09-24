@@ -5,10 +5,10 @@ namespace GearPulse;
 public static class AppLog
 {
     private static readonly object Gate = new();
-    private static readonly string LogPath = Path.Combine(
+    public static readonly string DataDirectory =
         Environment.GetEnvironmentVariable("GEARPULSE_DATA_DIR")
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GearPulse"),
-        "gear-pulse.log");
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GearPulse");
+    private static readonly string LogPath = Path.Combine(DataDirectory, "gear-pulse.log");
 
     public static void Write(string message, Exception? error = null)
     {

@@ -11,14 +11,7 @@ public sealed record DeviceState(
 {
     public bool IsVisible => Status != "hidden";
     public bool IsLow => Battery is >= 0 and <= 20;
-    public string StatusText => Status switch
-    {
-        "mouse_offline" => "鼠标未连接或休眠",
-        "device_offline" => "设备未连接或休眠",
-        _ when !ReceiverPresent => "接收器未连接",
-        _ when Battery is null => Status == "device_busy" ? "设备正在被读取" : "电量暂不可用",
-        _ => $"{Battery}% · {(Charging is null ? "充电状态未知" : Charging.Value ? "充电中" : "未充电")}"
-    };
+    public string StatusText => UiLanguage.StatusText(this);
 }
 
 public interface IBatteryProvider
@@ -57,26 +50,47 @@ public sealed class BlackSharkBatteryProvider : IBatteryProvider
     }
 }
 
-public sealed class AtkMouseBatteryProvider(int product) : IBatteryProvider
+public sealed class AtkBatteryProvider : IBatteryProvider
 {
-    public string Id => product == 0x1278 ? "atk-f1-v3" : "atk-a9-plus";
-    private string Name => product == 0x1278 ? "ATK F1 V3 ULTIMATE+" : "ATK A9 PLUS NK";
+    public string Id => "atk-peripherals";
 
     public IReadOnlyList<DeviceState> Read()
     {
-        if (product is not (0x1278 or 0x10c9)) throw new ArgumentOutOfRangeException(nameof(product));
         try
         {
-            var sample = AtkMouseHid.SampleByProduct(product, 1000);
-            if (sample.Status == "receiver_absent")
-                return [new(Id, Name, "mouse", null, null, false, "hidden")];
-            return [new(Id, sample.Name ?? Name, "mouse", sample.Battery, sample.Charging,
-                sample.ReceiverPresent, sample.Status)];
+            AtkMouseHid.Device[] mouseInterfaces;
+            try { mouseInterfaces = AtkMouseHid.Enumerate(); }
+            catch (Exception error)
+            {
+                AppLog.Write("ATK mouse interface discovery failed", error);
+                mouseInterfaces = [];
+            }
+            var hidNodes = mouseInterfaces.Where(device => device.ContainerId != Guid.Empty)
+                .Select(device => new AtkDeviceDiscovery.Node(
+                device.ContainerId, device.Path, device.Vendor, device.Product,
+                device.ProductName ?? "", device.ManufacturerName ?? "", "Mouse"));
+            var peripherals = AtkDeviceDiscovery.Resolve(
+                AtkDeviceDiscovery.EnumerateNodes().Concat(hidNodes));
+            return peripherals.Select(peripheral =>
+            {
+                var hid = mouseInterfaces.FirstOrDefault(device => device.ContainerId != Guid.Empty &&
+                    device.ContainerId == peripheral.ContainerId);
+                if (hid is null && peripheral.ContainerId == Guid.Empty)
+                    hid = mouseInterfaces.FirstOrDefault(device => device.Vendor == peripheral.Vendor &&
+                        device.Product == peripheral.Product);
+                if (hid is null || peripheral.Icon != "mouse")
+                    return new DeviceState(peripheral.Id, peripheral.Name, peripheral.Icon,
+                        null, null, true, "unavailable");
+                var sample = AtkMouseHid.Sample(hid, 1000);
+                var name = sample.Name is null or "ATK MOUSE" ? peripheral.Name : sample.Name;
+                return new DeviceState(peripheral.Id, name, "mouse", sample.Battery,
+                    sample.Charging, true, sample.Status);
+            }).ToArray();
         }
         catch (Exception error)
         {
-            AppLog.Write($"ATK {product:X4} sample failed", error);
-            return [new(Id, Name, "mouse", null, null, true, "error")];
+            AppLog.Write("ATK device discovery failed", error);
+            return [];
         }
     }
 }
@@ -86,8 +100,7 @@ public static class DeviceRoster
     public static readonly IReadOnlyList<IBatteryProvider> Providers =
     [
         new BlackSharkBatteryProvider(),
-        new AtkMouseBatteryProvider(0x1278),
-        new AtkMouseBatteryProvider(0x10c9),
+        new AtkBatteryProvider(),
         new LogitechBatteryProvider()
     ];
 

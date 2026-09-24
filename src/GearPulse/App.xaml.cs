@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Threading;
@@ -18,6 +19,7 @@ public partial class App : Application
     private NotifyIcon? tray;
     private System.Drawing.Icon? icon;
     private MainWindow? window;
+    private static readonly string LanguagePath = Path.Combine(AppLog.DataDirectory, "settings.json");
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -47,6 +49,7 @@ public partial class App : Application
 
         try
         {
+            UiLanguage.Load(LanguagePath);
             exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName);
             showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
             exitRegistration = ThreadPool.RegisterWaitForSingleObject(exitEvent,
@@ -72,30 +75,59 @@ public partial class App : Application
     {
         icon = TrayIconFactory.Create();
         var menu = new ContextMenuStrip();
-        var visible = new ToolStripMenuItem("显示小组件") { Checked = true, CheckOnClick = false };
+        var visible = new ToolStripMenuItem { Checked = true, CheckOnClick = false };
         visible.Click += (_, _) => { commands!.SetVisible(!commands.IsVisible); visible.Checked = commands.IsVisible; };
-        var startup = new ToolStripMenuItem("开机启动");
+        var startup = new ToolStripMenuItem();
         startup.Click += (_, _) =>
         {
             try { commands!.SetAutostart(startup.Checked == false); }
             catch (Exception error)
             {
                 AppLog.Write("Could not change autostart", error);
-                System.Windows.MessageBox.Show("无法修改开机启动任务。请重新运行安装脚本。", "GearPulse");
+                System.Windows.MessageBox.Show(UiLanguage.AutostartError, "GearPulse");
             }
         };
+        var quit = new ToolStripMenuItem();
+        quit.Click += (_, _) => commands!.Exit();
+        var language = new ToolStripMenuItem();
+        foreach (var (code, name) in new[]
+        {
+            (UiLanguage.SimplifiedChinese, "简体中文"),
+            (UiLanguage.English, "English"),
+            (UiLanguage.TraditionalChinese, "繁體中文")
+        })
+        {
+            var item = new ToolStripMenuItem(name) { Tag = code };
+            item.Click += (_, _) =>
+            {
+                UiLanguage.Select(code);
+                UiLanguage.Save(LanguagePath);
+                window!.RefreshLanguage();
+                UpdateTexts();
+            };
+            language.DropDownItems.Add(item);
+        }
+        void UpdateTexts()
+        {
+            visible.Text = UiLanguage.ShowWidget;
+            var state = commands!.AutostartEnabled;
+            startup.Enabled = state.HasValue;
+            startup.Checked = state == true;
+            startup.Text = state.HasValue ? UiLanguage.StartWithWindows : UiLanguage.InstallFirst;
+            language.Text = UiLanguage.LanguageMenu;
+            foreach (ToolStripMenuItem item in language.DropDownItems)
+                item.Checked = (string)item.Tag! == UiLanguage.Current;
+            quit.Text = UiLanguage.Exit;
+            tray!.Text = UiLanguage.WindowTitle;
+        }
         menu.Opening += (_, _) =>
         {
             visible.Checked = commands!.IsVisible;
-            var state = commands.AutostartEnabled;
-            startup.Enabled = state.HasValue;
-            startup.Checked = state == true;
-            startup.Text = state.HasValue ? "开机启动" : "开机启动（需先安装）";
+            UpdateTexts();
         };
-        var quit = new ToolStripMenuItem("退出");
-        quit.Click += (_, _) => commands!.Exit();
-        menu.Items.AddRange([visible, startup, new ToolStripSeparator(), quit]);
-        tray = new NotifyIcon { Icon = icon, Text = "GearPulse | 外设脉动", ContextMenuStrip = menu, Visible = true };
+        menu.Items.AddRange([visible, startup, language, new ToolStripSeparator(), quit]);
+        tray = new NotifyIcon { Icon = icon, ContextMenuStrip = menu, Visible = true };
+        UpdateTexts();
         tray.DoubleClick += (_, _) => { commands!.SetVisible(true); };
     }
 
