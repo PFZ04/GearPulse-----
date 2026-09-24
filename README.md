@@ -1,5 +1,7 @@
 # GearPulse｜外设脉动
 
+当前发布版本：**V1.1**（产品版本 `1.1.0`，Windows 文件版本 `1.1.0.0`）。
+
 Windows 桌面电量小组件，显示 Razer BlackShark V2 Pro、通过 USB 接收器或有线 USB 连接的 ATK／VXE／VGN 外设，以及通过 HID++ LIGHTSPEED 接收器连接并报告真实百分比的罗技鼠标和键盘。正式程序是 .NET 10 WPF 独立 EXE，不需要 PowerShell 常驻运行；PowerShell 仅用于构建、安装和诊断。
 
 | 设备 | 识别方式 | 行为 |
@@ -18,7 +20,7 @@ pwsh -NoProfile -File .\Publish-GearPulse.ps1
 pwsh -NoProfile -File .\Install-BatteryWidget.ps1
 ```
 
-发布结果在 `publish\win-x64\GearPulse.exe`，是包含运行时的独立程序。安装脚本将当前用户的 `GearPulse` 登录任务指向该 EXE；运行中的旧小组件会停止。首次切换前应直接运行 EXE，检查实际桌面显示。详细操作见 [WIDGET-README.md](WIDGET-README.md)。
+V1.1 将通用 ATK／VXE／VGN 设备支持与简体中文、English、繁體中文界面合并在同一个 EXE 中。发布结果在 `publish\win-x64\GearPulse.exe`，是包含运行时的独立程序。安装脚本将当前用户的 `GearPulse` 登录任务指向该 EXE；运行中的旧小组件会停止。替换正在运行的程序前，可用 `pwsh -NoProfile -File .\Publish-GearPulse.ps1 -OutputPath .\publish\v1.1-candidate` 先构建候选包并完成验证。详细操作见 [WIDGET-README.md](WIDGET-README.md)。
 
 ## 验证
 
