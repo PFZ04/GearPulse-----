@@ -40,4 +40,6 @@ pwsh -NoProfile -File .\Install-LegacyBatteryWidget.ps1
 
 ### ATK A9 Mini+ 识别检查
 
+用户实测结果：有线模式下，A9 Mini+ 的鼠标型号、电量和充电状态均正常；接收器模式下，界面显示 `ATK 8K Dongle`，电量和充电状态正常。接收器模式尚未确认能识别配对鼠标为 A9 Mini+，因此仍保留中性接收器名称。
+
 `dotnet run --project .\tests\GearPulse.Smoke\GearPulse.Smoke.csproj -c Release -- --atk-diagnostics` 列出 ATK 接收器 ID、接口规格，以及已验证 17 字节接口的只读在线、身份和电量查询结果；不输出设备路径或序列号，不对其他接口发送命令。A9 Mini+ 通过 2.4G 连接并唤醒后，检查其 `CID/MID`、状态和电量，并与 ATK HUB 对照。所有已收录的 ATK／VXE／VGN 鼠标 ID 只用于发现设备；能从设备描述识别出的接收器显示中性名称，不根据接收器 ID 或带型号的接收器描述推断当前配对鼠标。只有已验证的鼠标身份应答才显示对应无线型号，休眠或查询失败时清除旧型号和电量。无法从描述区分接收器与有线鼠标的型号仍需实机核对。通过 USB 数据线连接时，检查 A9 Mini+ 显示鼠标图标。未取得有效无线应答前不为 A9 Mini+ 添加推测的身份映射或电量协议。
