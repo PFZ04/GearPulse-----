@@ -49,6 +49,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
+SetupIconFile=..\src\GearPulse\Assets\AppIcon.ico
 Compression=lzma2
 SolidCompression=yes
 UsePreviousTasks=yes
@@ -83,7 +84,7 @@ Source: "InstallerTask.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "InstallerTask.ps1"; Flags: dontcopy
 
 [Icons]
-Name: "{group}\GearPulse"; Filename: "{app}\GearPulse.exe"
+Name: "{group}\GearPulse"; Filename: "{app}\GearPulse.exe"; IconFilename: "{app}\GearPulse.exe"
 
 #if TestBuild == "0"
 [Run]

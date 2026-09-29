@@ -13,7 +13,8 @@ public sealed record WidgetSettings(
     string Corner = "bottom-right",
     bool ShowWiredHeadsets = true,
     bool ShowBluetoothHeadsets = true,
-    bool HideUnreadableInformation = false)
+    bool HideUnreadableInformation = false,
+    bool ShowBluetoothSpeakers = true)
 {
     public double Scale => Size switch { "small" => .8, "large" => 1.25, _ => 1 };
 
@@ -46,7 +47,8 @@ public sealed record WidgetSettings(
                 Number(value, "backgroundOpacity", 92), Number(value, "contentOpacity", 100),
                 String(value, "monitor"), String(value, "corner") ?? "bottom-right",
                 Boolean(value, "showWiredHeadsets"), Boolean(value, "showBluetoothHeadsets"),
-                Enabled(value, "hideUnreadableInformation")).Normalized();
+                Enabled(value, "hideUnreadableInformation"),
+                Boolean(value, "showBluetoothSpeakers")).Normalized();
         }
         catch (Exception error)
         {
@@ -68,7 +70,8 @@ public sealed record WidgetSettings(
             ["corner"] = value.Corner,
             ["showWiredHeadsets"] = value.ShowWiredHeadsets,
             ["showBluetoothHeadsets"] = value.ShowBluetoothHeadsets,
-            ["hideUnreadableInformation"] = value.HideUnreadableInformation
+            ["hideUnreadableInformation"] = value.HideUnreadableInformation,
+            ["showBluetoothSpeakers"] = value.ShowBluetoothSpeakers
         };
     });
 }

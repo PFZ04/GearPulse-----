@@ -12,7 +12,7 @@ public sealed class SilhouetteSourceConverter : IMultiValueConverter
     public object? Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
     {
         if (values.Length < 2 || values[1] as string != "silhouette" || values[0] is not string kind ||
-            kind is not ("mouse" or "headset" or "keyboard" or "gamepad")) return null;
+            kind is not ("mouse" or "headset" or "keyboard" or "gamepad" or "speaker")) return null;
         if (!Images.TryGetValue(kind, out var image))
         {
             image = new BitmapImage(new Uri($"pack://application:,,,/GearPulse;component/Assets/{kind}.png"));
@@ -30,7 +30,7 @@ public sealed class LineIconVisibilityConverter : IMultiValueConverter
 {
     public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture) =>
         values.Length >= 2 && values[1] as string == "silhouette" && values[0] is string kind &&
-        kind is "mouse" or "headset" or "keyboard" or "gamepad" ? Visibility.Collapsed : Visibility.Visible;
+        kind is "mouse" or "headset" or "keyboard" or "gamepad" or "speaker" ? Visibility.Collapsed : Visibility.Visible;
 
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();

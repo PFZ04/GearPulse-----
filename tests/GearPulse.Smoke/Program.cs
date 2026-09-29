@@ -113,7 +113,7 @@ if (args.Contains("--g522-watch", StringComparer.OrdinalIgnoreCase))
 if (args.Contains("--audio-integration", StringComparer.OrdinalIgnoreCase))
 {
     foreach (var endpoint in AudioHeadsetDiscovery.Enumerate())
-        Console.WriteLine($"{endpoint.Name}: formFactor={endpoint.FormFactor}, connection={endpoint.Connection}");
+        Console.WriteLine($"{endpoint.Name}: type={endpoint.Icon}, formFactor={endpoint.FormFactor}, connection={endpoint.Connection}, battery={endpoint.Battery?.ToString() ?? "unknown"}");
     return;
 }
 
@@ -235,6 +235,9 @@ try
     var headsetSettings = appearance with { ShowWiredHeadsets = false, ShowBluetoothHeadsets = false };
     Check(headsetSettings.Save(settingsPath), "headset visibility settings save");
     Check(WidgetSettings.Load(settingsPath) == headsetSettings, "headset visibility settings reload");
+    var speakerSettings = headsetSettings with { ShowBluetoothSpeakers = false };
+    Check(speakerSettings.Save(settingsPath) && WidgetSettings.Load(settingsPath) == speakerSettings,
+        "speaker visibility setting reload");
     var hiddenInformation = appearance with { HideUnreadableInformation = true };
     Check(hiddenInformation.Save(settingsPath), "hidden information setting saves");
     Check(WidgetSettings.Load(settingsPath) == hiddenInformation, "hidden information setting reloads");
@@ -342,6 +345,7 @@ Check(AudioHeadsetDiscovery.IsHeadset(3, "Headphones (Realtek Audio)"), "headpho
 Check(AudioHeadsetDiscovery.IsHeadset(5, "Generic Audio"), "headset form factor");
 Check(AudioHeadsetDiscovery.IsHeadset(1, "USB Gaming Headset"), "named headset fallback");
 Check(!AudioHeadsetDiscovery.IsHeadset(1, "Desktop Speakers"), "speakers excluded");
+Check(AudioHeadsetDiscovery.IsSpeaker(1, "Generic Audio"), "speaker form factor");
 var audioContainer = Guid.NewGuid();
 var audioNodes = new[]
 {
@@ -350,6 +354,35 @@ var audioNodes = new[]
 Check(AudioHeadsetDiscovery.ConnectionFor(audioContainer, "Headphones", audioNodes) == "bluetooth", "Bluetooth transport");
 Check(AudioHeadsetDiscovery.ConnectionFor(Guid.Empty, "LIGHTSPEED Headset", []) == "wireless", "receiver transport");
 Check(AudioHeadsetDiscovery.ConnectionFor(Guid.Empty, "Headphones", []) == "wired", "wired transport");
+var speakerNodes = new[]
+{
+    new AtkDeviceDiscovery.Node(audioContainer, "BTHENUM\\SPEAKER", 0, 0, "JBL Flip 6", "", "Bluetooth", 63, true)
+};
+var speaker = AudioHeadsetDiscovery.Resolve("speaker-a", "Speakers (JBL Flip 6)", 1, audioContainer, speakerNodes);
+Check(speaker is { Icon: "speaker", Connection: "bluetooth", Battery: 63 }, "active Bluetooth speaker battery");
+Check(AudioHeadsetDiscovery.Resolve("pc", "Speakers (Realtek Audio)", 1, Guid.NewGuid(), []) is null,
+    "built-in speakers excluded");
+var placeholderContainer = new Guid("00000000-0000-0000-ffff-ffffffffffff");
+Check(AudioHeadsetDiscovery.Resolve("steam", "Speakers (Steam Streaming Speakers)", 1,
+    placeholderContainer, [speakerNodes[0] with { ContainerId = placeholderContainer }]) is null,
+    "system placeholder container is not a physical Bluetooth speaker");
+Check(AudioHeadsetDiscovery.Resolve("headset", "Headphones (JBL Flip 6)", 1,
+    audioContainer, speakerNodes) is { Icon: "headset" }, "headset name outranks speaker form factor");
+Check(AudioHeadsetDiscovery.Resolve("paired", "Speakers (JBL Flip 6)", 1, audioContainer,
+    [speakerNodes[0] with { Connected = false }]) is null, "paired disconnected speaker excluded");
+var unknownSpeaker = AudioHeadsetDiscovery.Resolve("speaker-a", "Speakers (JBL Flip 6)", 1,
+    audioContainer, [speakerNodes[0] with { Battery = null }]);
+Check(unknownSpeaker is { Icon: "speaker", Battery: null }, "missing speaker battery remains unknown");
+Check(AudioHeadsetDiscovery.Resolve("speaker-a", "Speakers (JBL Flip 6)", 1,
+    audioContainer, [speakerNodes[0] with { Battery = 255 }]) is { Battery: null },
+    "invalid speaker battery rejected");
+Check(AudioHeadsetDiscovery.ToStates([speaker!, speaker! with { Id = "speaker-b", Battery = null }])
+    .Count(state => state.Icon == "speaker") == 1, "multiple speaker endpoints merged");
+Check(AudioHeadsetDiscovery.ToStates([speaker!, new AudioHeadsetDiscovery.Endpoint(
+    "handsfree", "Headset (JBL Flip 6)", 5, audioContainer, "bluetooth")]).Count == 1,
+    "speaker and hands-free endpoint stay one physical row");
+Check(AudioHeadsetDiscovery.ToStates([unknownSpeaker!]).Single().Battery is null,
+    "speaker battery cleared on next sample");
 var headsets = HeadsetRoster.Merge([
     new("g522", "Logitech G522 LIGHTSPEED", "headset", 72, false, true, "ok", "wireless"),
     new("audio-a", "Headphones (G522 LIGHTSPEED)", "headset", null, null, true, "unavailable", "wired"),
@@ -472,6 +505,16 @@ Check(DeviceRoster.Visible([
     new("bt", "Bluetooth Headphones", "headset", null, null, true, "unavailable", "bluetooth"),
     new("w", "Wireless Headset", "headset", null, null, true, "unavailable", "wireless")
 ], new WidgetSettings(ShowBluetoothHeadsets: false)).Count == 1, "Bluetooth setting filters only Bluetooth headset");
+Check(DeviceRoster.Visible([
+    new("speaker", "JBL Flip 6", "speaker", null, null, true, "unavailable", "bluetooth"),
+    new("headset", "Bluetooth Headphones", "headset", null, null, true, "unavailable", "bluetooth")
+], new WidgetSettings(ShowBluetoothSpeakers: false)).Single().Icon == "headset",
+    "speaker setting does not hide Bluetooth headset");
+Check(DeviceRoster.Visible([
+    new("speaker", "JBL Flip 6", "speaker", null, null, true, "unavailable", "bluetooth"),
+    new("headset", "Bluetooth Headphones", "headset", null, null, true, "unavailable", "bluetooth")
+], new WidgetSettings(ShowBluetoothHeadsets: false)).Single().Icon == "speaker",
+    "headset setting does not hide Bluetooth speaker");
 var g522Request = G522Hid.BuildBatteryRequest();
 Check(g522Request.Length == 64 && g522Request[0] == 0x50 && g522Request[1] == 0x23 &&
     g522Request[2] == 0x0b && g522Request[9] == 0x05 && g522Request[10] == 0x0a, "G522 read-only request");

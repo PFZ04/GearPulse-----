@@ -7,7 +7,8 @@ namespace GearPulse;
 // Core Audio exposes active playback endpoints, including USB, analog and Bluetooth.
 public static class AudioHeadsetDiscovery
 {
-    public sealed record Endpoint(string Id, string Name, uint FormFactor, Guid ContainerId, string Connection);
+    public sealed record Endpoint(string Id, string Name, uint FormFactor, Guid ContainerId, string Connection,
+        string Icon = "headset", int? Battery = null);
 
     [StructLayout(LayoutKind.Sequential)] private readonly struct PropertyKey(Guid format, uint id)
     {
@@ -58,6 +59,7 @@ public static class AudioHeadsetDiscovery
     private static readonly PropertyKey FriendlyName = new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
     private static readonly PropertyKey FormFactor = new(new Guid("1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E"), 0);
     private static readonly PropertyKey ContainerId = new(new Guid("8C7ED206-3F8A-4827-B3AB-AE9E1FAEFC6C"), 2);
+    private static readonly Guid SystemPlaceholderContainer = new("00000000-0000-0000-ffff-ffffffffffff");
 
     private static PropertyValue Get(IPropertyStore store, PropertyKey key)
     {
@@ -89,6 +91,56 @@ public static class AudioHeadsetDiscovery
         name.Contains("earphone", StringComparison.OrdinalIgnoreCase) ||
         name.Contains("耳机", StringComparison.OrdinalIgnoreCase) ||
         name.Contains("耳機", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsSpeaker(uint formFactor, string name) =>
+        formFactor == 1 || name.Contains("speaker", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("soundbar", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("音箱", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("音響", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("扬声器", StringComparison.OrdinalIgnoreCase) ||
+        name.Contains("喇叭", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPhysicalContainer(Guid container) =>
+        container != Guid.Empty && container != SystemPlaceholderContainer;
+
+    private static IReadOnlyList<AtkDeviceDiscovery.Node> BluetoothNodes(Guid container, string name,
+        IReadOnlyList<AtkDeviceDiscovery.Node> nodes)
+    {
+        var direct = !IsPhysicalContainer(container) ? [] : nodes.Where(node => node.ContainerId == container &&
+            node.InstanceId.StartsWith("BTH", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (direct.Length > 0) return direct;
+        // Some audio endpoints use a different container from their Bluetooth parent.
+        var matches = nodes.Where(node => IsPhysicalContainer(node.ContainerId) &&
+            node.InstanceId.StartsWith("BTH", StringComparison.OrdinalIgnoreCase) &&
+            node.Name.Length >= 5 && !node.Name.StartsWith("Bluetooth", StringComparison.OrdinalIgnoreCase) &&
+            name.Contains(node.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
+        return matches.Select(node => node.ContainerId).Distinct().Take(2).Count() == 1 ? matches : [];
+    }
+
+    public static Endpoint? Resolve(string id, string name, uint formFactor, Guid container,
+        IReadOnlyList<AtkDeviceDiscovery.Node> nodes)
+    {
+        if (name.Length == 0) return null;
+        var bluetooth = BluetoothNodes(container, name, nodes);
+        var related = !IsPhysicalContainer(container) ? [] : nodes.Where(node => node.ContainerId == container).ToArray();
+        var connection = ConnectionFor(container, name, related);
+        if (bluetooth.Count > 0) connection = "bluetooth";
+        var speakerHint = bluetooth.Any(node => IsSpeaker(uint.MaxValue, node.Name));
+        var speaker = bluetooth.Count > 0 &&
+            (speakerHint || IsSpeaker(formFactor, name) && !IsHeadset(formFactor, name));
+        if (speaker)
+        {
+            if (bluetooth.Any(node => node.Connected == false) &&
+                !bluetooth.Any(node => node.Connected == true)) return null;
+            var physicalContainer = bluetooth[0].ContainerId;
+            var battery = bluetooth.Where(node => node.Connected != false && node.Battery is >= 0 and <= 100)
+                .Select(node => node.Battery).FirstOrDefault();
+            return new Endpoint(id, name, formFactor, physicalContainer, "bluetooth", "speaker", battery);
+        }
+        return IsHeadset(formFactor, name)
+            ? new Endpoint(id, name, formFactor,
+                bluetooth.Count > 0 ? bluetooth[0].ContainerId : container, connection) : null;
+    }
 
     public static string ConnectionFor(Guid container, string name, IEnumerable<AtkDeviceDiscovery.Node> nodes)
     {
@@ -130,11 +182,10 @@ public static class AudioHeadsetDiscovery
                         {
                             var name = ReadString(store, FriendlyName).Trim();
                             var formFactor = ReadNumber(store, FormFactor);
-                            if (!IsHeadset(formFactor, name) || name.Length == 0) continue;
                             var container = ReadGuid(store, ContainerId);
                             device.GetId(out var id);
-                            endpoints.Add(new Endpoint(id, name, formFactor, container,
-                                ConnectionFor(container, name, nodes)));
+                            var endpoint = Resolve(id, name, formFactor, container, nodes);
+                            if (endpoint is not null) endpoints.Add(endpoint);
                         }
                         finally { Marshal.ReleaseComObject(store); }
                     }
@@ -147,17 +198,31 @@ public static class AudioHeadsetDiscovery
         finally { Marshal.ReleaseComObject(enumerator); }
     }
 
+    public static IReadOnlyList<DeviceState> ToStates(IEnumerable<Endpoint> source)
+    {
+        var endpoints = source.Select(endpoint =>
+        {
+            var key = endpoint.Icon == "speaker" && endpoint.ContainerId != Guid.Empty
+                ? endpoint.ContainerId.ToString("N") : endpoint.Id;
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+            var id = $"audio-{Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant()}";
+            return new DeviceState(id, endpoint.Name, endpoint.Icon, endpoint.Battery, null, true,
+                endpoint.Battery.HasValue ? "ok" : "unavailable", endpoint.Connection, endpoint.ContainerId);
+        }).ToArray();
+        var speakers = endpoints.Where(state => state.Icon == "speaker").GroupBy(state => state.Id)
+            .Select(group => group.OrderByDescending(state => state.Battery.HasValue)
+                .ThenByDescending(state => IsSpeaker(uint.MaxValue, state.Name)).First()).ToArray();
+        var speakerContainers = speakers.Select(state => state.ContainerId)
+            .Where(container => container != Guid.Empty).ToHashSet();
+        return endpoints.Where(state => state.Icon != "speaker" &&
+            !speakerContainers.Contains(state.ContainerId)).Concat(speakers).ToArray();
+    }
+
     public static IReadOnlyList<DeviceState> Sample()
     {
         try
         {
-            return Enumerate().Select(endpoint =>
-            {
-                var hash = SHA256.HashData(Encoding.UTF8.GetBytes(endpoint.Id));
-                var id = $"audio-{Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant()}";
-                return new DeviceState(id, endpoint.Name, "headset", null, null, true,
-                    "unavailable", endpoint.Connection, endpoint.ContainerId);
-            }).ToArray();
+            return ToStates(Enumerate());
         }
         catch (Exception error)
         {

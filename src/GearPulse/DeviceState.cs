@@ -133,6 +133,7 @@ public static class DeviceRoster
 
     public static IReadOnlyList<DeviceState> Visible(IEnumerable<DeviceState> states, WidgetSettings settings) =>
         HeadsetRoster.Merge(states).Where(s => s.IsVisible &&
+            (s.Icon != "speaker" || settings.ShowBluetoothSpeakers) &&
             (s.Icon != "headset" || s.Connection switch
             {
                 "wired" => settings.ShowWiredHeadsets,

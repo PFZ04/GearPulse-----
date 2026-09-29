@@ -30,7 +30,9 @@ pwsh -NoProfile -File .\Remove-BatteryWidget.ps1
 pwsh -NoProfile -File .\Install-LegacyBatteryWidget.ps1
 ```
 
-托盘“开机启动”切换当前用户的 `GearPulse` 计划任务。直接运行 EXE 而尚未安装登录任务时，该菜单项不可用。托盘“语言”菜单可在简体中文、English 和繁體中文之间切换。托盘“外观设置”可即时预览线条或剪影图标、小／中／大尺寸、背景和文字图标各自的透明度，以及显示器与四角位置，并可分别开启／关闭有线和蓝牙耳机行；两项默认开启，不影响 LIGHTSPEED。“隐藏无法读取的信息”默认关闭；开启后保留设备名称和图标，只显示可读取的电量及充电状态，没有可读电量时收起状态文字。默认仍是主屏右下角的现有外观；选中的显示器断开后，卡片暂回主屏，重新连接后恢复。语言和外观保存在 `%LOCALAPPDATA%\GearPulse\settings.json`，下次启动沿用。日志位于 `%LOCALAPPDATA%\GearPulse\gear-pulse.log`；开发测试时可设置 `GEARPULSE_DATA_DIR` 将日志和设置放在指定目录。旧版设备诊断脚本和 `Start-BatteryWidget.ps1` 仍保留，但不再作为正式入口。
+托盘“开机启动”切换当前用户的 `GearPulse` 计划任务。直接运行 EXE 而尚未安装登录任务时，该菜单项不可用。托盘“语言”菜单可在简体中文、English 和繁體中文之间切换。托盘“外观设置”可即时预览线条或剪影图标、小／中／大尺寸、背景和文字图标各自的透明度，以及显示器与四角位置，并可分别开启／关闭有线耳机、蓝牙耳机和蓝牙音箱行；三项默认开启，不影响 LIGHTSPEED。“隐藏无法读取的信息”默认关闭；开启后保留设备名称和图标，只显示可读取的电量及充电状态，没有可读电量时收起状态文字。默认仍是主屏右下角的现有外观；选中的显示器断开后，卡片暂回主屏，重新连接后恢复。语言和外观保存在 `%LOCALAPPDATA%\GearPulse\settings.json`，下次启动沿用。日志位于 `%LOCALAPPDATA%\GearPulse\gear-pulse.log`；开发测试时可设置 `GEARPULSE_DATA_DIR` 将日志和设置放在指定目录。旧版设备诊断脚本和 `Start-BatteryWidget.ps1` 仍保留，但不再作为正式入口。
+
+蓝牙音箱通过当前活动的 Windows 播放端点发现，仅显示可关联到蓝牙设备节点的音箱，不列出电脑内置扬声器或仅已配对而未连接的设备。同一音箱的多个播放端点合并为一行；Windows 当前提供有效的 `0–100` 电量值时显示百分比，否则显示“电量暂不可用”。不推测充电状态。可用 `dotnet run --project .\tests\GearPulse.Smoke\GearPulse.Smoke.csproj -c Release -- --audio-integration` 查看发现的音频类型、连接方式和电量（不输出设备标识）。
 
 发布目录应保持在固定位置，登录任务通过该路径启动 EXE。迁移脚本在 `state\gear-pulse-task-before-wpf.xml` 保存原 `GearPulse` 任务定义，并禁用旧名称 `BlackShark Battery Widget` 的登录任务以避免重复卡片；回退脚本会重新注册旧版 `GearPulse` 任务。Wallpaper Engine 桥接任务由用户原有备份负责恢复，安装程序不会修改壁纸。
 

@@ -48,6 +48,9 @@
                                             <DataTrigger Binding="{Binding Icon}" Value="gamepad">
                                                 <Setter Property="Data" Value="M12,15 L28,15 C32,15 34,17 35,21 L37,29 C38,33 35,35 32,32 L27,28 13,28 8,32 C5,35 2,33 3,29 L5,21 C6,17 8,15 12,15 Z M10,21 L18,21 M14,17 L14,25 M27,20 L27,21 M31,23 L31,24" />
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding Icon}" Value="speaker">
+                                                <Setter Property="Data" Value="M8,6 L29,6 Q32,6 32,9 L32,34 L8,34 Z M20,11 A3,3 0 1 1 20,17 A3,3 0 1 1 20,11 M20,20 A5,5 0 1 1 20,30 A5,5 0 1 1 20,20" />
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Path.Style>

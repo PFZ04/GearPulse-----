@@ -47,6 +47,7 @@ public static class UiLanguage
     public static string CornerLabel => Current switch { English => "Corner", TraditionalChinese => "角落", _ => "角落" };
     public static string ShowWiredHeadsets => Current switch { English => "Show wired headsets", TraditionalChinese => "顯示有線耳機", _ => "显示有线耳机" };
     public static string ShowBluetoothHeadsets => Current switch { English => "Show Bluetooth headsets", TraditionalChinese => "顯示藍牙耳機", _ => "显示蓝牙耳机" };
+    public static string ShowBluetoothSpeakers => Current switch { English => "Show Bluetooth speakers", TraditionalChinese => "顯示藍牙音箱", _ => "显示蓝牙音箱" };
     public static string HideUnreadableInformation => Current switch { English => "Hide unavailable information", TraditionalChinese => "隱藏無法讀取的資訊", _ => "隐藏无法读取的信息" };
     public static string LineIcons => Current switch { English => "Line", TraditionalChinese => "線條", _ => "线条" };
     public static string SilhouetteIcons => Current switch { English => "Silhouette", TraditionalChinese => "剪影", _ => "剪影" };

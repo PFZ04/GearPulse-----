@@ -10,6 +10,8 @@ GearPulse 是一个面向 Windows 的桌面外设电量小组件。它把已连�
 
 ## 当前版本
 
+V1.3.9 蓝牙音箱候选版位于 `publish\bluetooth-speaker-candidate\GearPulse.exe`。它显示当前连接的蓝牙音箱，Windows 提供有效电量时显示百分比；独立的“显示蓝牙音箱”开关默认开启。`--audio-integration` 诊断可查看当前音频设备类型、连接方式及电量。
+
 本机正在运行 **V1.3.8**；自包含候选版位于 `publish\valkyrie-final\GearPulse.exe`，安装包位于 `publish\GearPulse-1.3.8-Setup.exe`。本机安装目录为 `%LOCALAPPDATA%\Programs\GearPulse`。VK MAG 75 MAX 的 2.4G 电量和蓝牙电量已在本机实测；USB 有线模式目前没有可信百分比。Viper V4 Pro 的型号和电量已由用户实机验证，充电状态不可读；其他雷蛇型号的通用电量读取尚未实机验证。
 
 ## 设备支持
