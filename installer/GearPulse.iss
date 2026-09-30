@@ -80,6 +80,7 @@ Name: "autostart"; Description: "{cm:StartupTask}"
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "InstallerTask.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "InstallerTask.ps1"; Flags: dontcopy
 

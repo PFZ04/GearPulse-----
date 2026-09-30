@@ -10,9 +10,11 @@ GearPulse 是一个面向 Windows 的桌面外设电量小组件。它把已连�
 
 ## 当前版本
 
-V1.3.9 蓝牙音箱候选版位于 `publish\bluetooth-speaker-candidate\GearPulse.exe`。它显示当前连接的蓝牙音箱，Windows 提供有效电量时显示百分比；独立的“显示蓝牙音箱”开关默认开启。`--audio-integration` 诊断可查看当前音频设备类型、连接方式及电量。
+当前版本为 **V1.3.10**，独立程序位于 `publish\bluetooth-headset-fix\GearPulse.exe`，安装包位于 `publish\GearPulse-1.3.10-Setup.exe`。安装包附带本 README，安装目录为 `%LOCALAPPDATA%\Programs\GearPulse`。
 
-本机正在运行 **V1.3.8**；自包含候选版位于 `publish\valkyrie-final\GearPulse.exe`，安装包位于 `publish\GearPulse-1.3.8-Setup.exe`。本机安装目录为 `%LOCALAPPDATA%\Programs\GearPulse`。VK MAG 75 MAX 的 2.4G 电量和蓝牙电量已在本机实测；USB 有线模式目前没有可信百分比。Viper V4 Pro 的型号和电量已由用户实机验证，充电状态不可读；其他雷蛇型号的通用电量读取尚未实机验证。
+V1.3.10 修复了蓝牙耳机已识别但漏读 Windows 电量的问题：OPPO Enco Air5s（星光版）已在本机实测读到 70%。蓝牙耳机和音箱只显示 Windows 提供的有效百分比，缺失或无效值保持未知；明确断开的设备不显示。耳机和音箱分别提供独立显示开关。`--audio-integration` 可查看音频设备类型、连接方式和 Windows 电量来源。耳机关机、重连及充电状态尚未实机验证。
+
+本版也包含桌面宿主暂时不可用时保持卡片可见并重试定位的修复。VK MAG 75 MAX 的 2.4G 和蓝牙电量已有实机记录，USB 有线电量未知；Viper V4 Pro 的型号和电量已有用户实测记录，充电状态未知。
 
 ## 设备支持
 
@@ -21,6 +23,8 @@ V1.3.9 蓝牙音箱候选版位于 `publish\bluetooth-speaker-candidate\GearPuls
 | 设备 | 识别方式 | 行为 |
 |---|---|---|
 | BlackShark V2 Pro | `1532:0555` | 电量、充电状态和接收器状态。 |
+| 蓝牙耳机（含 OPPO Enco Air5s） | 活动 Windows 播放端点及匹配的蓝牙设备容器 | 读取 Windows 提供的有效电量百分比；缺失或无效值保持未知，明确断开时不显示。OPPO Enco Air5s 已实测 70%，充电状态未知。 |
+| 蓝牙音箱 | 活动 Windows 播放端点及匹配的蓝牙设备容器 | 读取 Windows 电量，按物理容器合并重复端点；独立的“显示蓝牙音箱”开关默认开启。ULT FIELD 1 已有 40% 实机读取记录。 |
 | Razer Viper V4 Pro | 有线 `1532:00E5`、无线 `1532:00E6` | 用户实测可显示型号与电量；充电状态未知。 |
 | Razer 鼠标／键盘／耳机 | Windows USB 或已连接蓝牙设备 | 自动发现、按设备容器去重；部分明确支持的 USB／接收器鼠标和键盘使用只读 HID 查询，蓝牙使用 Windows 提供的电量值，其他设备显示“电量暂不可用”。无法确认配对型号的接收器使用接收器名称。 |
 | ATK／VXE／VGN 鼠标、键盘、耳机 | USB 设备容器、厂商信息或已收录的产品 ID | 自动发现并去重；产品 ID 只用于发现设备，不直接决定鼠标型号。有已验证电量协议时读取百分比，否则显示“电量暂不可用”。 |
@@ -53,18 +57,20 @@ V1.3.9 蓝牙音箱候选版位于 `publish\bluetooth-speaker-candidate\GearPuls
 
 ## 构建与安装
 
-普通用户可直接运行 `publish\GearPulse-1.3.8-Setup.exe` 安装 V1.3.8，无需安装 .NET SDK。安装向导默认勾选登录时启动；可取消，之后仍可从托盘切换。安装包只为当前 Windows 用户安装，并在卸载时询问是否清除设置与日志。制作安装包的步骤见 [安装包说明](installer/README.md)。
+普通用户可直接运行 `publish\GearPulse-1.3.10-Setup.exe` 安装 V1.3.10，无需安装 .NET SDK。覆盖安装保留现有设置。安装向导默认勾选登录时启动；可取消，之后仍可从托盘切换。安装包只为当前 Windows 用户安装，并在卸载时询问是否清除设置与日志。制作安装包的步骤见 [安装包说明](installer/README.md)。
 
-需要从源码重新生成 V1.3.8 程序和安装包时，在 Windows x64 上安装 .NET 10 SDK 和 Inno Setup 7，然后在仓库目录运行：
+需要从源码重新生成 V1.3.10 程序和安装包时，在 Windows x64 上安装 .NET 10 SDK 和 Inno Setup 7，然后在仓库目录运行：
 
 ```powershell
-pwsh -NoProfile -File .\Publish-GearPulse.ps1 -OutputPath .\publish\valkyrie-final
-pwsh -NoProfile -File .\Build-Installer.ps1 -SourceExe .\publish\valkyrie-final\GearPulse.exe -ExpectedVersion 1.3.8
+pwsh -NoProfile -File .\Publish-GearPulse.ps1 -OutputPath .\publish\bluetooth-headset-fix
+pwsh -NoProfile -File .\Build-Installer.ps1 -SourceExe .\publish\bluetooth-headset-fix\GearPulse.exe -ExpectedVersion 1.3.10
 ```
 
 “外观设置”中的“隐藏无法读取的信息”默认关闭。开启后，设备名称和图标仍显示；电量可读但充电状态未知时只显示电量，电量也不可读时收起状态文字。该设置会保存并即时生效。详细操作见 [WIDGET-README.md](WIDGET-README.md)。
 
 ## 验证
+
+V1.3.10 已通过 227 项离线检查，新增覆盖蓝牙耳机电量传递、音频容器不一致、名称匹配歧义、断开来源、缺失和无效电量，以及有效 0%。本机音频诊断确认 OPPO Enco Air5s 从未知电量恢复为 70%；物理关机和重连尚未实测。详细记录见 [蓝牙耳机修复验证](tests/bluetooth-headset-verification.md)。
 
 ```powershell
 dotnet run --project .\tests\GearPulse.Smoke\GearPulse.Smoke.csproj -c Release
@@ -75,4 +81,4 @@ pwsh -NoProfile -File .\Test-BlackSharkProtocol.ps1
 
 ATK 系列发现范围是能够从 Windows USB 设备信息确认品牌的 ATK／VXE／VGN 设备，以及已收录产品 ID 的鼠标；蓝牙不在范围内。共用 Compx 芯片的其他品牌不会仅凭厂商 ID 被误认。可识别的接收器显示中性名称，不采用接收器 ID 或带型号的接收器描述来判断配对鼠标；无法从描述区分接收器与有线鼠标的设备仍需实机核对。17 字节鼠标协议匹配时才查询电量；其他协议的型号（包括 ATK Zero）目前显示未知电量。A9 Mini+ 接收器模式已由用户确认能显示电量和充电状态，但仍显示 `ATK 8K Dongle`；无线身份需取得有效应答后才能标为 A9 Mini+，不能借用 F1 的身份映射推测。已收录的鼠标 ID 参考 [Mouse Tray 的协议与型号表](https://github.com/Fan4Metal/mouse_tray/tree/master/mouse_tray/drivers/chipset)。
 
-罗技支持限于能通过接收器的 HID++ 2.0 接口确认型号、名称、类型与真实电量百分比的无线设备；仅有电压或粗略档位的设备不会显示。雷蛇只对 [OpenRazer 鼠标](https://github.com/openrazer/openrazer/blob/master/driver/razermouse_driver.c)与[键盘](https://github.com/openrazer/openrazer/blob/master/driver/razerkbd_driver.c)电量查询明确列出的产品 ID，以及 [Viper V4 Pro 实机读取实现](https://github.com/Riqqqque/RazerBatteryDisplay/blob/main/src/battery.rs)确认的 `00E5`／`00E6` 发送只读电量查询；必须符合预期 HID 接口和有效应答才显示百分比。Viper V4 Pro 的型号和电量已由用户实测，充电状态保持未知。耳机除 BlackShark V2 Pro 外当前仅做通用发现；蓝牙仅在 Windows 报告连接状态和电量时显示百分比。雷蛇其他通用协议和蓝牙读取目前只有离线测试，其他型号尚未实机验证。BlackShark 协议参考 [OpenRazer PR #2862](https://github.com/openrazer/openrazer/pull/2862)，罗技 HID++ 功能参考 [Logitech 文档](https://github.com/Logitech/cpg-docs/tree/master/hidpp20)。本项目采用 [GPL-2.0-or-later](LICENSE)；本机日志、截图和原始 HID 报文不纳入仓库。
+罗技支持限于能通过接收器的 HID++ 2.0 接口确认型号、名称、类型与真实电量百分比的无线设备；仅有电压或粗略档位的设备不会显示。雷蛇只对 [OpenRazer 鼠标](https://github.com/openrazer/openrazer/blob/master/driver/razermouse_driver.c)与[键盘](https://github.com/openrazer/openrazer/blob/master/driver/razerkbd_driver.c)电量查询明确列出的产品 ID，以及 [Viper V4 Pro 实机读取实现](https://github.com/Riqqqque/RazerBatteryDisplay/blob/main/src/battery.rs)确认的 `00E5`／`00E6` 发送只读电量查询；必须符合预期 HID 接口和有效应答才显示百分比。Viper V4 Pro 的型号和电量已由用户实测，充电状态保持未知。蓝牙耳机通过活动音频端点读取匹配设备的 Windows 电量，OPPO Enco Air5s 已有实机读取记录；其他耳机的发现不保证电量协议受支持。雷蛇其他通用协议和蓝牙读取目前只有离线测试，其他型号尚未实机验证。BlackShark 协议参考 [OpenRazer PR #2862](https://github.com/openrazer/openrazer/pull/2862)，罗技 HID++ 功能参考 [Logitech 文档](https://github.com/Logitech/cpg-docs/tree/master/hidpp20)。本项目采用 [GPL-2.0-or-later](LICENSE)；本机日志、截图和原始 HID 报文不纳入仓库。

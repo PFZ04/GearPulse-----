@@ -44,6 +44,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool userHidden;
     private bool exiting;
     private bool hostMissingLogged;
+    private bool positionFailureLogged;
     private WidgetSettings settings = new();
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -150,11 +151,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             var host = FindDesktopHost();
             if (host == IntPtr.Zero)
             {
-                if (!hostMissingLogged) AppLog.Write("Desktop host unavailable; waiting for Explorer");
+                if (!hostMissingLogged) AppLog.Write("Desktop host unavailable; keeping card visible while waiting for Explorer");
                 hostMissingLogged = true;
-                Hide(); desktopHost = IntPtr.Zero; return;
+                return;
             }
-            hostMissingLogged = false;
             var screen = WidgetPlacement.SelectScreen(Screen.AllScreens, settings.Monitor);
             if (screen is null) return;
             var source = (HwndSource?)PresentationSource.FromVisual(this);
@@ -179,12 +179,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 lastPlacement = placement;
                 if (moved) AppLog.Write($"Desktop card positioned at {placement.X},{placement.Y} {width}x{height}");
             }
+            if (hostMissingLogged)
+            {
+                AppLog.Write("Desktop host restored");
+                hostMissingLogged = false;
+            }
+            if (positionFailureLogged)
+            {
+                AppLog.Write("Desktop positioning restored");
+                positionFailureLogged = false;
+            }
         }
         catch (Exception error)
         {
-            AppLog.Write("Desktop positioning failed", error);
-            Hide();
-            desktopHost = IntPtr.Zero;
+            if (!positionFailureLogged) AppLog.Write("Desktop positioning failed; keeping card visible and retrying", error);
+            positionFailureLogged = true;
         }
     }
 

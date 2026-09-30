@@ -114,6 +114,9 @@ if (args.Contains("--audio-integration", StringComparer.OrdinalIgnoreCase))
 {
     foreach (var endpoint in AudioHeadsetDiscovery.Enumerate())
         Console.WriteLine($"{endpoint.Name}: type={endpoint.Icon}, formFactor={endpoint.FormFactor}, connection={endpoint.Connection}, battery={endpoint.Battery?.ToString() ?? "unknown"}");
+    foreach (var node in AtkDeviceDiscovery.EnumerateNodes(false).Where(node =>
+        node.InstanceId.StartsWith("BTH", StringComparison.OrdinalIgnoreCase) && node.Battery.HasValue))
+        Console.WriteLine($"Bluetooth battery source {node.Name}: battery={node.Battery}, connected={node.Connected?.ToString() ?? "unknown"}, container={node.ContainerId}");
     return;
 }
 
@@ -354,6 +357,32 @@ var audioNodes = new[]
 Check(AudioHeadsetDiscovery.ConnectionFor(audioContainer, "Headphones", audioNodes) == "bluetooth", "Bluetooth transport");
 Check(AudioHeadsetDiscovery.ConnectionFor(Guid.Empty, "LIGHTSPEED Headset", []) == "wireless", "receiver transport");
 Check(AudioHeadsetDiscovery.ConnectionFor(Guid.Empty, "Headphones", []) == "wired", "wired transport");
+var bluetoothHeadsetNodes = new[]
+{
+    new AtkDeviceDiscovery.Node(audioContainer, "BTHENUM\\HEADSET", 0, 0, "OPPO Enco Air5s", "", "Bluetooth", 80, true)
+};
+var bluetoothHeadset = AudioHeadsetDiscovery.Resolve("bt-headset", "Headphones (OPPO Enco Air5s)", 3,
+    audioContainer, bluetoothHeadsetNodes);
+Check(bluetoothHeadset is { Icon: "headset", Connection: "bluetooth", Battery: 80 }, "Bluetooth headset reads Windows battery");
+Check(AudioHeadsetDiscovery.ToStates([bluetoothHeadset!]).Single() is { Battery: 80, Status: "ok" },
+    "Bluetooth headset battery reaches card state");
+Check(AudioHeadsetDiscovery.Resolve("bt-headset", "Headphones (OPPO Enco Air5s)", 3, Guid.NewGuid(),
+    bluetoothHeadsetNodes) is { Battery: 80, ContainerId: var headsetContainer } && headsetContainer == audioContainer,
+    "Bluetooth headset resolves battery across audio container mismatch");
+Check(AudioHeadsetDiscovery.Resolve("bt-headset", "Headphones (OPPO Enco Air5s)", 3, Guid.NewGuid(),
+    [bluetoothHeadsetNodes[0], bluetoothHeadsetNodes[0] with { ContainerId = Guid.NewGuid() }]) is { Battery: null },
+    "ambiguous Bluetooth headset identity does not borrow battery");
+Check(AudioHeadsetDiscovery.Resolve("bt-headset", "Headphones (OPPO Enco Air5s)", 3, audioContainer,
+    [bluetoothHeadsetNodes[0] with { Connected = false }]) is null, "disconnected Bluetooth headset excluded");
+Check(AudioHeadsetDiscovery.Resolve("bt-headset", "Headphones (OPPO Enco Air5s)", 3, audioContainer,
+    [bluetoothHeadsetNodes[0] with { Battery = null }]) is { Battery: null }, "Bluetooth headset missing battery clears old value");
+Check(AudioHeadsetDiscovery.Resolve("bt-headset", "Headphones (OPPO Enco Air5s)", 3, audioContainer,
+    [bluetoothHeadsetNodes[0] with { Battery = 255 }]) is { Battery: null }, "Bluetooth headset invalid battery rejected");
+Check(AudioHeadsetDiscovery.Resolve("bt-headset", "Headphones (OPPO Enco Air5s)", 3, audioContainer,
+    [bluetoothHeadsetNodes[0] with { Battery = 0 }]) is { Battery: 0 }, "Bluetooth headset valid empty battery retained");
+Check(AudioHeadsetDiscovery.Resolve("bt-headset", "Headphones (OPPO Enco Air5s)", 3, audioContainer,
+    [bluetoothHeadsetNodes[0] with { Connected = false }, bluetoothHeadsetNodes[0] with { Battery = 70 }]) is { Battery: 70 },
+    "Bluetooth headset ignores disconnected battery source");
 var speakerNodes = new[]
 {
     new AtkDeviceDiscovery.Node(audioContainer, "BTHENUM\\SPEAKER", 0, 0, "JBL Flip 6", "", "Bluetooth", 63, true)

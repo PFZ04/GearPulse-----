@@ -128,18 +128,18 @@ public static class AudioHeadsetDiscovery
         var speakerHint = bluetooth.Any(node => IsSpeaker(uint.MaxValue, node.Name));
         var speaker = bluetooth.Count > 0 &&
             (speakerHint || IsSpeaker(formFactor, name) && !IsHeadset(formFactor, name));
-        if (speaker)
+        if (!speaker && !IsHeadset(formFactor, name)) return null;
+        if (bluetooth.Count > 0)
         {
             if (bluetooth.Any(node => node.Connected == false) &&
                 !bluetooth.Any(node => node.Connected == true)) return null;
             var physicalContainer = bluetooth[0].ContainerId;
             var battery = bluetooth.Where(node => node.Connected != false && node.Battery is >= 0 and <= 100)
                 .Select(node => node.Battery).FirstOrDefault();
-            return new Endpoint(id, name, formFactor, physicalContainer, "bluetooth", "speaker", battery);
+            return new Endpoint(id, name, formFactor, physicalContainer, "bluetooth",
+                speaker ? "speaker" : "headset", battery);
         }
-        return IsHeadset(formFactor, name)
-            ? new Endpoint(id, name, formFactor,
-                bluetooth.Count > 0 ? bluetooth[0].ContainerId : container, connection) : null;
+        return new Endpoint(id, name, formFactor, container, connection);
     }
 
     public static string ConnectionFor(Guid container, string name, IEnumerable<AtkDeviceDiscovery.Node> nodes)
